@@ -1,0 +1,54 @@
+Modules loaded
+Done copying.
+Python 3.8.1
+Python code starts now!
+dataset : /scratch/Books_5.json.gz
+pkl_path : /home/hbartsch/thesis-user-modelling/datasets/out-pickle
+batch_size : 128
+max_seq_length : 512
+drop_org_reviews : 0
+Device: cuda:0
+30522
+Start reading: /scratch/Books_5.json.gz
+0.0
+1.0
+2.0
+3.0
+4.0
+5.0
+6.0
+7.0
+8.0
+9.0
+10.0
+11.0
+12.0
+13.0
+14.0
+15.0
+16.0
+17.0
+18.0
+19.0
+20.0
+21.0
+22.0
+23.0
+24.0
+Traceback (most recent call last):
+  File "prep_amazon_books.py", line 310, in <module>
+    main(config)
+  File "prep_amazon_books.py", line 291, in main
+    user_dict, item_dict = preprocessDF_lisa(data_path, pkl_path, bert_tokenizer, bert_model,
+  File "prep_amazon_books.py", line 214, in preprocessDF_lisa
+    for d in parse2(f):
+  File "prep_amazon_books.py", line 35, in parse2
+    for l in f:
+  File "/home/hbartsch/.conda/envs/thesis-user-modelling/lib/python3.8/gzip.py", line 384, in readline
+    return self._buffer.readline(size)
+  File "/home/hbartsch/.conda/envs/thesis-user-modelling/lib/python3.8/_compression.py", line 68, in readinto
+    data = self.read(len(byte_view))
+  File "/home/hbartsch/.conda/envs/thesis-user-modelling/lib/python3.8/gzip.py", line 492, in read
+    raise EOFError("Compressed file ended before the "
+EOFError: Compressed file ended before the end-of-stream marker was reached
+Done!

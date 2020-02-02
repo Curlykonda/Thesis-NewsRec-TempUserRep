@@ -1,0 +1,16 @@
+File exists
+Python 3.8.1
+Python code starts now!
+dataset : /scratch/Books_5.json.gz
+pkl_path : /home/hbartsch/thesis-user-modelling/datasets/out-pickle/
+batch_size : 128
+max_seq_length : 512
+drop_org_reviews : 0
+n_reviews : -1
+load_pkl : /home/hbartsch/thesis-user-modelling/datasets/out-pickle/df.pkl
+Device: cuda:0
+Pickle Protocol: 5
+Loading intermediate results from /home/hbartsch/thesis-user-modelling/datasets/out-pickle/df.pkl
+Lines in DF: 4000001
+Cleaning Text..
+slurmstepd: error: *** JOB 4433568 ON r31n1 CANCELLED AT 2020-02-01T12:32:58 DUE TO TIME LIMIT ***

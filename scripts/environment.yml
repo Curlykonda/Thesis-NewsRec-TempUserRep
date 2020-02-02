@@ -1,0 +1,5 @@
+name: thesis-user-modelling
+channels:
+- defaults
+prefix: /home/hbartsch/.conda/envs/thesis-user-modelling
+
