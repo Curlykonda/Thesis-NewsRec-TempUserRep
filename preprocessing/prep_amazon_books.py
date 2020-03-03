@@ -21,39 +21,15 @@ import matplotlib.pyplot as plt
 from datetime import datetime
 from tqdm import tqdm
 
-import nltk
-#nltk.download('poplular')
-from nltk.tokenize import word_tokenize, sent_tokenize
-from nltk.corpus import stopwords
-from nltk.stem.porter import PorterStemmer
-
-#from pytorch_pretrained_bert import BertTokenizer, BertModel
 from transformers import BertTokenizer, BertModel
 import torch
-from torch.utils.data import DataLoader, Dataset
+
+from bert_feature_extractor import BertFeatureExtractor
 
 
 def parse2(f):
     for l in f:
         yield json.loads(l.strip())
-
-
-def clean_text(sent, tokenizer, stop_words=None, stemmer=None):
-
-    # tokenise & punctuation
-    tokens = [word for word in tokenizer.tokenize(sent) if word.isalpha()]
-
-    if not stop_words == None:
-        #stop_words = list(set(stopwords.words('english')))
-        # filter stop words
-        tokens = [word for word in tokens if word not in stop_words]
-
-    if not stemmer == None:
-        tokens = [stemmer.stem(token) for token in tokens]
-
-    # locating and correcting common typos & misspellings
-
-    return tokens
 
 def truncate_seq(tokens, tokenizer, max_len=512):
     if len(tokens) < max_len:
@@ -69,22 +45,37 @@ def truncate_seq(tokens, tokenizer, max_len=512):
     
     return tokens
 
-def tokenize_text_to_ids(text, tokenizer, sent_tokenize, max_len=512):
+def tokenize_text_to_ids(text, tokenizer, sent_tokenize, max_len=512, add_special_tokens=True, lower_case=False):
+    """
+    With tokenizer, separate text first into tokens 
+    and then convert these to corresponding IDs of the vocabulary
+    
+    Return: 
+        tokens: list of token IDs
+        n_words: number of words in full sequence (before truncating)
+    """
     sents = sent_tokenize(text)
     tokens = []
     n_words = 0
+    added_tokens = 0
 
-    tokens.append(tokenizer.cls_token)
-    added_tokens = 1
+    if add_special_tokens:
+        tokens.append(tokenizer.cls_token)
+        added_tokens+=1
 
+    #split each sentence of the text into tokens
     for s in sents:
-        # tokenise & punctuation
-        #tokens.extend(tokenizer.tokenize(s))
-        tokens.extend(tokenizer.tokenize([word for word in tokenizer.tokenize(s) if word.isalpha()]))
-        tokens.append(tokenizer.sep_token)
-        added_tokens += 1
+        if lower_case:
+            tokens.extend([word.lower() for word in tokenizer.tokenize(s) if word.isalpha()])
+        else:
+            tokens.extend([word for word in tokenizer.tokenize(s) if word.isalpha()])
+
+        if add_special_tokens:
+            tokens.append(tokenizer.sep_token)
+            added_tokens += 1
     
     n_words = len(tokens) - added_tokens
+
     tokens = truncate_seq(tokens, tokenizer, max_len)
     
     assert len(tokens) == max_len
@@ -122,44 +113,19 @@ def prep_text(df, bert_tokenizer, bert_model, batch_size, max_len, device, drop_
 
     print("Encoding Text..")
 
-    bert_model.to(device)
+    #bert_model.to(device)
 
     encoded_text = {}
-    start_idx = 0
-    stop_idx = batch_size
 
     df["n_words"] = 0
 
-    while(start_idx < len(df)):
 
-        if stop_idx > len(df):
-            stop_idx = len(df)
-
-        encoded_in, n_words = zip(*[tokenize_text_to_ids(text, bert_tokenizer, sent_tokenize, max_len) for text
-                  in list(df['reviewText'])[start_idx:stop_idx]])
-        
-        encoded_in = torch.tensor(encoded_in, requires_grad=False, device=device).long()
-
-        with torch.no_grad():
-            last_hidden, pooled_out = bert_model(encoded_in)
-
-        assert last_hidden.shape[0] == batch_size
-
-        #save tensor of encoded text into separate dictionary
-        keys = range(start_idx, stop_idx)
-        
-        encoded_text = {**encoded_text, **dict(zip(keys, last_hidden))}
-
-        df.loc[keys, "n_words"] = n_words
-
-        start_idx += (batch_size+1)
-        stop_idx += (batch_size+1)
 
     print("done")
     if drop_org_reviews:
         df = df.drop('reviewText', axis=1)
 
-    df.astype({"n_words":'int32'})
+    df.astype({"n_words": 'int32'})
         
     return df, encoded_text
 
@@ -214,7 +180,7 @@ def aggregate_info(df, user_d, items_d):
 def print_time(t0):
     print("Done after in {}".format(time.strftime("%H:%M:%S", time.gmtime(time.time() - t0))))
 
-def preprocessDF_lisa(path, pkl_path, bert_tokenizer, bert_model, device, batch_size, max_len=200, drop_org_reviews=False):
+def preprocessDF_lisa(path, pkl_path, bert_feature_extractor, device, batch_size, max_len=200, drop_org_reviews=False):
     
     #init variables
     user_dict = {}
@@ -233,7 +199,6 @@ def preprocessDF_lisa(path, pkl_path, bert_tokenizer, bert_model, device, batch_
         data = {}
         t1 = time.time()
 
-        
         with gzip.open(path, 'rb') as f:
             print("Start reading: {}".format(path))
             for d in parse2(f):
@@ -275,7 +240,7 @@ def preprocessDF_lisa(path, pkl_path, bert_tokenizer, bert_model, device, batch_
 
     # encode review text with Bert
     t1 = time.time()
-    df, encoded_text = prep_text(df, bert_tokenizer, bert_model, batch_size, max_len=max_len, drop_org_reviews=drop_org_reviews, device=device)
+    df, encoded_text = prep_text(df, bert_feature_extractor, batch_size, max_len=max_len, drop_org_reviews=drop_org_reviews, device=device)
     print_time(t1)
 
     # aggregate info
@@ -321,14 +286,7 @@ def main(config):
     print("Pickle Protocol: {}".format(pickle.HIGHEST_PROTOCOL))
 
     #load BERT
-    bert_tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
-    bert_tokenizer.add_special_tokens({"unk_token": '[UNK]', 'cls_token': '[CLS]',
-                                       'pad_token': '[PAD]', 'sep_token': '[SEP]'})
-    #print(len(bert_tokenizer))
-    assert bert_tokenizer.cls_token == '[CLS]'
-
-    bert_model = BertModel.from_pretrained('bert-base-uncased')
-    bert_model.resize_token_embeddings(len(bert_tokenizer))
+    bert_feature_extractor = BertFeatureExtractor(device, **config)
 
     data_path = config.dataset
     pkl_path = config.pkl_path
@@ -336,8 +294,8 @@ def main(config):
     user_dict = {}
     item_dict = {}
 
-    user_dict, item_dict = preprocessDF_lisa(data_path, pkl_path, bert_tokenizer, bert_model,
-                                             device=device, batch_size=config.batch_size, max_len=config.max_seq_length, drop_org_reviews=config.drop_org_reviews)
+    user_dict, item_dict = preprocessDF_lisa(data_path, pkl_path, bert_feature_extractor,
+                                             device=device, drop_org_reviews=config.drop_org_reviews)
 
 
 
