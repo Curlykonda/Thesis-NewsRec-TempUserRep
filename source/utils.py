@@ -56,12 +56,15 @@ def get_art_id_from_dpg_history(articles_read):
     # entry[2] = time_stamp
     return [entry[1] for entry in articles_read]
 
-def get_vocab_from_word_counts(vocab_raw, min_counter):
-    vocab = defaultdict(int)
-
-    # key: 'word', value: [index, counts]
-    for word in vocab_raw:
-        if vocab_raw[word][1] >= min_counter:
-            vocab[word] = [len(vocab), vocab_raw[word][1]]
-
+def build_vocab_from_word_counts(vocab_raw, max_vocab_size, min_counts_for_vocab):
+    vocab = {}
+    # vocab = dict(heapq.nlargest(max_vocab_size, vocab.items(), key=lambda i: i[1]))
+    for word, counter in vocab_raw.most_common(max_vocab_size):
+        if counter >= min_counts_for_vocab:
+            vocab[word] = len(vocab)
+        else:
+            break
     return vocab
+
+def reverse_mapping_dict(item2idx):
+    return {idx: item for item, idx in item2idx.items()}

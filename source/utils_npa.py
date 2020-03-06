@@ -3,7 +3,9 @@ import csv
 import random
 import nltk
 from nltk.tokenize import word_tokenize
-from collections import defaultdict
+from nltk import FreqDist
+
+from collections import defaultdict, Counter
 
 import datetime
 import time
@@ -13,8 +15,11 @@ import numpy as np
 import pickle
 from numpy.linalg import cholesky
 
-from utils import get_art_id_from_dpg_history, get_vocab_from_word_counts, pad_sequence
+from utils import get_art_id_from_dpg_history, build_vocab_from_word_counts, pad_sequence, reverse_mapping_dict
 from sklearn.model_selection import train_test_split
+from sklearn.feature_extraction.text import CountVectorizer, TfidfVectorizer
+
+import heapq
 
 DATA_TYPES = ["NPA", "DPG", "Adressa"]
 
@@ -194,11 +199,7 @@ def preprocess_npa_user_file(click_file='ClickData4.tsv', npratio=4, max_hist_le
            candidates_test, labels_test, user_ids_test, \
            user_hist_pos_train, user_hist_pos_test, indices_test, all_news_ids
 
-def prep_dpg_user_file(user_file, all_article_ids, npratio=4, max_hist_len=50):
-
-    user_file="../datasets/dpg/users5k_on_items100k.pkl"
-
-    user_data = {}
+def prep_dpg_user_file(user_file, all_article_ids, art_id2idx, npratio=4, max_hist_len=50):
 
     with open(user_file, "rb") as fin:
         user_data = pickle.load(fin)
@@ -216,14 +217,17 @@ def prep_dpg_user_file(user_file, all_article_ids, npratio=4, max_hist_len=50):
 
         # aggregate article ids of positive
         pos_impre = get_art_id_from_dpg_history(user_data[u_id]["articles_read"])
+        pos_impre = [art_id2idx[article] for article in pos_impre]
 
         for pos_sample in pos_impre:
 
-            candidate_articles = newsample(all_article_ids, npratio)  # generate negative samples
+            # generate negative samples
+            candidate_articles = [art_id2idx[art_id] for art_id in newsample(all_article_ids, npratio)]
             candidate_articles.append(pos_sample)
             labels = [0] * npratio + [1] # create temp labels
-            candidate_articles = np.array(list(zip(candidate_articles, labels))) # zip art_id and label
+            candidate_articles = list(zip(candidate_articles, labels)) # zip art_id and label
             random.shuffle(candidate_articles) # shuffle article ids with corresponding label
+            candidate_articles = np.array(candidate_articles)
 
             pos_set = list(set(pos_impre) - set([pos_sample]))  # remove positive sample from user history
 
@@ -232,19 +236,13 @@ def prep_dpg_user_file(user_file, all_article_ids, npratio=4, max_hist_len=50):
             hist += [0] * (max_hist_len - len(hist))
 
             candidates_train.append(candidate_articles[:, 0])  # ids of candidate items
-            labels_train.append(candidate_articles[:, 1])
+            lbls = candidate_articles[:, 1]
+            assert lbls.__contains__(1) # sanity check
+            labels_train.append(lbls)
+
             user_ids_train.append(u_id2idx[u_id])
             user_hist_pos_train.append(hist)
-
-            # if DEBUG
-            if len(candidates_train) % 1e3 == 0:
-                print("Train pn: {}".format(candidates_train[-1]))
-                print("Labels: {}".format(labels_train[-1]))
-                print("Pos: {}".format(user_hist_pos_train[-1]))
-
-        #
-
-
+    #
     #reformat to np int arrays
 
     candidates_train = np.array(candidates_train, dtype='int32')
@@ -300,43 +298,46 @@ def preprocess_npa_news_file(news_file='DocMeta3.tsv', min_counts_for_vocab=2, m
 
     return word_dict, news_words, news_index
 
-def preprocess_dpg_news_file(news_file, tokenizer, min_counts_for_vocab=2, max_len_news_title=30):
+def preprocess_dpg_news_file(news_file, tokenizer, min_counts_for_vocab=2, max_len_news_title=30, max_vocab_size=30000):
 
     with open(news_file, 'rb') as f:
         news_data = pickle.load(f)
 
-    vocab_raw = defaultdict(list)
     vocab = defaultdict(int)
     news_as_word_ids = []
     art_id2idx = {}
 
     # 1. construct raw vocab
-    vocab_raw = {'PADDING': [0, 999999]}  # key: 'word', value: [index, counts]
+    #TODO: use existing libraries to build vocabulary
+    print("construct raw vocabulary ...")
+    vocab_raw = Counter({'PAD': 999999})
 
-    for news_art in news_data:
-        news_art['tokens'] = tokenizer(news_art["snippet"].lower(), language='dutch')
-        for token in news_art['tokens']:
-            if token in vocab_raw:
-                vocab_raw[token][1] += 1
-            else:
-                vocab_raw[token] = [len(vocab_raw), 1]
+    for art_id in news_data:
+        tokens = tokenizer(news_data[art_id]["snippet"].lower(), language='dutch')
+        vocab_raw.update(tokens)
+        news_data[art_id]['tokens'] = tokens
+
+        if len(vocab_raw) % 1e4 == 0:
+            print(len(vocab_raw))
 
     # 2. construct working vocab
-    vocab = get_vocab_from_word_counts(vocab_raw, min_counts_for_vocab)
+    print("construct working vocabulary ...")
+    vocab = build_vocab_from_word_counts(vocab_raw, max_vocab_size, min_counts_for_vocab)
     print("Vocab: {}  Raw: {}".format(len(vocab), len(vocab_raw)))
     #del(vocab_raw)
 
     # 3. encode news as sequence of word_ids
+    print("encode news as word_ids ...")
     news_as_word_ids = [[0] * max_len_news_title]  # encoded news title
     art_id2idx = {'0': 0}  # dictionary news indices
 
-    for news in news_data:
+    for art_id in news_data:
         word_ids = []
 
-        art_id2idx[news] = len(art_id2idx) # map article id to index
+        art_id2idx[art_id] = len(art_id2idx) # map article id to index
 
         # get word_ids from news title
-        for word in news['tokens']:
+        for word in news_data[art_id]['tokens']:
             # if word occurs in vocabulary, add the id
             # unknown words are omitted
             if word in vocab:
@@ -399,7 +400,7 @@ def get_embedding(word_dict, emb_path):
 
     return embedding_matrix
 
-def generate_batch_data_train(all_train_pn, all_label, all_train_id, batch_size, all_user_pos, news_words):
+def generate_npa_batch_data_train(all_train_pn, all_label, all_train_id, batch_size, all_user_pos, news_words):
     inputid = np.arange(len(all_label))
     np.random.shuffle(inputid)
     y = all_label
@@ -451,6 +452,43 @@ def generate_batch_data_test(all_test_pn, all_label, all_test_id, batch_size, al
 
             yield ([candidate] + browsed_news_split + [userid], label)
 
+def gen_batch_data(data, news_as_word_ids, batch_size=100, test=False):
+
+    #TODO: implement nice and more general dataloader
+    n_batches = range(len(data) // batch_size + 1)
+
+    batches = [(batch_size * i, min(len(data), batch_size * (i + 1))) for i in
+               n_batches]
+
+    for start, stop in batches:
+        # get data for this batch
+        cands, hist, users, labels = zip(*[(news_as_word_ids[data_p['candidates']], news_as_word_ids[data_p['history']],
+                                            data_p['u_id'], data_p['labels'])
+                                                for data_p in data[start:stop]]) #return multiple lists from list comprehension
+
+        # get candidates
+        candidates = np.array(cands) # shape: batch_size X n_candidates X title_len
+        if test:
+            candidates_split = [candidates]
+        else:
+            candidates_split = [candidates[:, k, :] for k in range(candidates.shape[1])] # candidate_split[0].shape := (batch_size, max_title_len)
+
+        # get history
+        hist = np.array(hist)  # shape: batch_size X max_hist_len X max_title_len
+        history_split = [hist[:, k, :] for k in range(hist.shape[1])]  # shape := (batch_size, max_title_len)
+
+        # get user ids
+        user_ids = np.expand_dims(np.array(users), axis=1)
+
+        # get labels
+        labels = np.array(labels)
+
+
+        # aggregate to batch
+        batch = (candidates_split + history_split + [user_ids], labels)
+
+        yield batch
+
 
 def main(config):
 
@@ -466,23 +504,38 @@ def main(config):
 
         word_dict, news_words, news_index = preprocess_npa_news_file(news_file=config.data_path + FILE_NAMES_NPA["news"])
 
-        traingen = generate_batch_data_train(all_train_pn, all_label, all_train_id, 100, all_user_pos, news_words)
+        traingen = generate_npa_batch_data_train(all_train_pn, all_label, all_train_id, 100, all_user_pos, news_words)
 
     elif config.data_type == "DPG":
         # use DPG data
 
-        #load item ids
-        with open(config.article_ids, 'rb') as fin:
-            all_article_ids = pickle.load(fin)
+        # load & prep news data
 
-        u_id2idx, data = prep_dpg_user_file(config.user_data, all_article_ids, npratio=config.neg_sample_ratio, max_hist_len=config.max_hist_len)
+        # TODO: add option to load existing data
+        '''
+        if config.load_prepped_news != None:
+            try:
+                pickle.load(new_file)
+            except:
+        '''
 
-        #TODO: add option to load existing data
-        vocab, news_as_word_ids, art_id2idx = preprocess_dpg_news_file(news_file=config.article_data, tokenizer=word_tokenize,
-                                                                       min_counts_for_vocab=2, max_len_news_title=30)
+        vocab, news_as_word_ids, art_id2idx = preprocess_dpg_news_file(news_file=config.article_data,
+                                                                       tokenizer=word_tokenize,
+                                                                       min_counts_for_vocab=2,
+                                                                       max_len_news_title=30)
 
         with open(config.data_path + "news_prepped.pkl", 'wb') as fout:
-            pickle.dump(fout, (vocab, news_as_word_ids, art_id2idx))
+            pickle.dump((vocab, news_as_word_ids, art_id2idx), fout)
+
+        u_id2idx, data = prep_dpg_user_file(config.user_data, set(art_id2idx.keys()), art_id2idx, npratio=config.neg_sample_ratio, max_hist_len=config.max_hist_len)
+
+        idx2u_id = reverse_mapping_dict(u_id2idx)
+        idx2art_id = reverse_mapping_dict(art_id2idx)
+
+        train_data, test_data = train_test_split(data, test_size=0.2, shuffle=True, random_state=42)
+
+        batch = gen_batch_data(train_data, news_as_word_ids, batch_size=100)
+
 
     elif config.data_type == "Adressa":
         # use Adressa data
@@ -498,15 +551,14 @@ if __name__ == "__main__":
     # input data
     parser.add_argument('--data_type', type=str, default='DPG',
                         help='options for data format: DPG, NPA or Adressa ')
-    parser.add_argument('--data_path', type=str, default='../datasets/dpg/i100k_u50k_s50/',
+    parser.add_argument('--data_path', type=str, default='../datasets/dpg/i10k_u5k_s30/',
                         help='path to data directory')
 
-    parser.add_argument('--article_ids', type=str, default='../datasets/dpg/i100k_u50k_s50/item_ids.pkl',
+    parser.add_argument('--article_ids', type=str, default='../datasets/dpg/i10k_u5k_s30/item_ids.pkl',
                         help='path to directory with item id pickle file')
-    parser.add_argument('--article_data', type=str, default='../datasets/dpg/i100k_u50k_s50/news_data.pkl',
+    parser.add_argument('--article_data', type=str, default='../datasets/dpg/i10k_u5k_s30/news_data.pkl',
                         help='path to article data pickle file')
-
-    parser.add_argument('--user_data', type=str, default='../datasets/dpg/i100k_u50k_s50/users5k_on_items100k.pkl',
+    parser.add_argument('--user_data', type=str, default='../datasets/dpg/i10k_u5k_s30/user_data.pkl',
                         help='path to user data pickle file')
 
     parser.add_argument('--word_emb_path', type=str, default='../embeddings/glove_eng.840B.300d.txt',
@@ -518,7 +570,7 @@ if __name__ == "__main__":
     parser.add_argument('--max_hist_len', type=int, default=50,
                         help='maximum length of user reading history, shorter ones are padded; should be in accordance with the input datasets')
 
-    parser.add_argument('--neg_sample_ration', type=int, default=4,
+    parser.add_argument('--neg_sample_ratio', type=int, default=4,
                         help='Negative sample ratio N: for each positive impression generate N negative samples')
 
     config = parser.parse_args()
