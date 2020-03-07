@@ -3,7 +3,6 @@ import csv
 import random
 import nltk
 from nltk.tokenize import word_tokenize
-from nltk import FreqDist
 
 from collections import defaultdict, Counter
 
@@ -14,6 +13,8 @@ import itertools
 import numpy as np
 import pickle
 from numpy.linalg import cholesky
+
+import fasttext
 
 from utils import get_art_id_from_dpg_history, build_vocab_from_word_counts, pad_sequence, reverse_mapping_dict
 from sklearn.model_selection import train_test_split
@@ -351,7 +352,6 @@ def preprocess_dpg_news_file(news_file, tokenizer, min_counts_for_vocab=2, max_l
 
     return vocab, news_as_word_ids, art_id2idx
 
-
 def get_embedding(word_dict, emb_path):
     embedding_dict = {}
 
@@ -399,6 +399,30 @@ def get_embedding(word_dict, emb_path):
     print("Shape Embedding matrix: {}".format(embedding_matrix.shape))
 
     return embedding_matrix
+
+def get_embeddings_from_pretrained(vocab, emb_path, emb_dim=300):
+    try:
+        ft = fasttext.load_model(emb_path) # load pretrained vectors
+
+        # check & adjust dimensionality
+        if ft.get_dimension() != emb_dim:
+            fasttext.util.reduce_model(ft, emb_dim)
+
+        embedding_matrix = [0] * len(vocab)
+        embedding_matrix[0] = np.zeros(emb_dim, dtype='float32')  # placeholder with zero values for 'PAD'
+
+        for word, idx in vocab.items():
+            embedding_matrix[idx] = ft[word] # how to deal with unknown words?
+
+        embedding_matrix = np.array(embedding_matrix, dtype='float32')
+        print("Shape Embedding matrix: {}".format(embedding_matrix.shape))
+
+        return embedding_matrix
+
+    except:
+        print("Could not load word embeddings")
+
+        return None
 
 def generate_npa_batch_data_train(all_train_pn, all_label, all_train_id, batch_size, all_user_pos, news_words):
     inputid = np.arange(len(all_label))
@@ -518,7 +542,6 @@ def main(config):
                 pickle.load(new_file)
             except:
         '''
-
         vocab, news_as_word_ids, art_id2idx = preprocess_dpg_news_file(news_file=config.article_data,
                                                                        tokenizer=word_tokenize,
                                                                        min_counts_for_vocab=2,

@@ -1,5 +1,6 @@
 import numpy as np
 import pickle
+import os
 import keras
 from keras.layers import *
 from keras.models import Model
@@ -10,7 +11,7 @@ from sklearn.model_selection import train_test_split
 from metrics import *
 from sklearn.metrics import roc_auc_score
 
-from utils_npa import gen_batch_data, prep_dpg_user_file, generate_npa_batch_data_train
+from utils_npa import gen_batch_data, prep_dpg_user_file, generate_npa_batch_data_train, get_embeddings_from_pretrained
 
 npratio = 4
 results = []
@@ -38,13 +39,27 @@ def get_default_params():
     config.random_seed = 42
 
     #data
-    config.user_data = '../' + '../datasets/dpg/i10k_u5k_s30/user_data.pkl'
-    config.data_path = '../' + '../datasets/dpg/i10k_u5k_s30/'
+    data_path = '../' + '../datasets/dpg/'
+    config.user_data = data_path + 'i10k_u5k_s30/user_data.pkl'
+    config.data_path = data_path + 'i10k_u5k_s30/'
+    config.emb_path = '../../embeddings/cc.nl.300.bin'
+
+    #results
+    config.model_save_path = '../../models/'
+    config.model_save_path = '../../results/'
 
     return config
 
+def test_model(config):
+    # TODO: check how to use **kwargs properly to initialise models
+    model, _ = build_model(config, n_users=10, vocab_len=10, pretrained_emb=None, emb_dim_user_id=5, emb_dim_pref_query=10,
+                emb_dim_words=10, n_filters_cnn=2)
+    print(model.summary())
+
+    return model
+
 def build_model(config, n_users, vocab_len, pretrained_emb, emb_dim_user_id=50, emb_dim_pref_query=200, emb_dim_words=300,
-                n_filters_cnn=400, dropout_p=0.2):
+                n_filters_cnn=400, dropout_p=0.2, **kwargs):
 
     ##user embedding - word & article level
     user_id = Input(shape=(1,), dtype='int32')
@@ -57,7 +72,12 @@ def build_model(config, n_users, vocab_len, pretrained_emb, emb_dim_user_id=50, 
 
     ##news encoder
     news_input = Input(shape=(config.max_len_title,), dtype='int32')
-    embedding_layer = Embedding(vocab_len, emb_dim_words, trainable=True) # weights=[pretrained_emb],
+
+    if pretrained_emb:
+        embedding_layer = Embedding(vocab_len, emb_dim_words, weights=[pretrained_emb], trainable=True) # weights=[pretrained_emb],
+    else:
+        embedding_layer = Embedding(vocab_len, emb_dim_words, trainable=True) # random initialisation
+
     embedded_sequences = embedding_layer(news_input)
     embedded_sequences = Dropout(dropout_p)(embedded_sequences)
 
@@ -115,19 +135,28 @@ def train():
 
     train_data, test_data = train_test_split(data, test_size=0.2, shuffle=True, random_state=config.random_seed)
 
+    # get pretrained embeddings
+    word_embeddings = get_embeddings_from_pretrained(vocab, config.emb_path, emb_dim=300)
+
     # 3. build model
-    model, model_test = build_model(config, n_users=len(u_id2idx), vocab_len=len(vocab), pretrained_emb=None)
+    model, model_test = build_model(config, n_users=len(u_id2idx), vocab_len=len(vocab), pretrained_emb=word_embeddings)
+    #model = test_model(config)
 
     # 4. training loop
+    results = {}
+
     for ep in range(config.n_epochs):
         traingen = gen_batch_data(train_data, news_as_word_ids, config.batch_size)
         model.fit_generator(traingen, epochs=1, steps_per_epoch=len(train_data) // config.batch_size)
 
-        testgen = gen_batch_data(train_data, news_as_word_ids, config.batch_size, test=True)
-        click_score = model_test.predict_generator(testgen, steps=len(train_data) // config.batch_size, verbose=1)
-
         # test
+        testgen = gen_batch_data(test_data, news_as_word_ids, config.batch_size)
+        #click_score = model_test.predict_generator(testgen, steps=len(testgen) // config.batch_size, verbose=1)
+        scores = model.predict_generator(testgen, steps=len(testgen) // config.batch_size, verbose=1)
 
+        results[ep] = scores
+
+        '''
         all_auc = []
         all_mrr = []
         all_ndcg5 = []
@@ -142,6 +171,12 @@ def train():
                 all_ndcg10.append(ndcg_score(all_test_label[m[0]:m[1]], click_score[m[0]:m[1], 0], k=10))
         results.append([np.mean(all_auc), np.mean(all_mrr), np.mean(all_ndcg5), np.mean(all_ndcg10)])
         print(np.mean(all_auc), np.mean(all_mrr), np.mean(all_ndcg5), np.mean(all_ndcg10))
+        '''
+
+    # save results
+    model.save(config.model_save_path + 'npa_keras_1')
+    with open(config.results_path + 'npa_keras_1', 'wb') as fout:
+        pickle.dump(results, fout)
 
 
 if __name__ == "__main__":
