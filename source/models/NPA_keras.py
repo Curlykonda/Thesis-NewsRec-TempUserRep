@@ -8,7 +8,8 @@ from keras import backend as K
 from keras.optimizers import *
 from sklearn.model_selection import train_test_split
 import sys
-sys.path.append('thesis-user-modelling/')
+#sys.path.append('thesis-user-modelling/')
+sys.path.append("..")
 
 from source.metrics import mrr_score, ndcg_score
 from sklearn.metrics import roc_auc_score
