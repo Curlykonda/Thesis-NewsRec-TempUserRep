@@ -131,3 +131,5 @@ dmypy.json
 
 datasets/
 /bert/
+/embeddings/
+/saved_models/

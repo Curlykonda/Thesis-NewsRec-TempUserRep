@@ -20,13 +20,10 @@ from datetime import datetime
 from tqdm import tqdm
 
 import nltk
-#nltk.download('poplular')
 from nltk.tokenize import word_tokenize, sent_tokenize
-#from nltk.corpus import stopwords
-#from nltk.stem.porter import PorterStemmer
 
-from transformers import BertTokenizer, BertModel
-import torch
+#from transformers import BertTokenizer, BertModel
+#import torch
 
 
 def pad_sequence(seq, max_len, pad_value=0, pad='post', trunc='last'):

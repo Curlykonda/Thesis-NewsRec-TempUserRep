@@ -11,7 +11,8 @@ from sklearn.model_selection import train_test_split
 from metrics import *
 from sklearn.metrics import roc_auc_score
 
-from utils_npa import gen_batch_data, prep_dpg_user_file, generate_npa_batch_data_train, get_embeddings_from_pretrained
+from utils_npa import gen_batch_data, prep_dpg_user_file, generate_npa_batch_data_train, get_embeddings_from_pretrained, \
+    gen_batch_data_test
 
 npratio = 4
 results = []
@@ -52,7 +53,7 @@ def get_default_params():
 
 def test_model(config):
     # TODO: check how to use **kwargs properly to initialise models
-    model, _ = build_model(config, n_users=10, vocab_len=10, pretrained_emb=None, emb_dim_user_id=5, emb_dim_pref_query=10,
+    model, model_test = build_model(config, n_users=10, vocab_len=10, pretrained_emb=None, emb_dim_user_id=5, emb_dim_pref_query=10,
                 emb_dim_words=10, n_filters_cnn=2)
     print(model.summary())
 
@@ -115,7 +116,7 @@ def build_model(config, n_users, vocab_len, pretrained_emb, emb_dim_user_id=50, 
     candidate_one = keras.Input((config.max_len_title,))
     candidate_one_vec = newsEncoder([candidate_one, user_id])
     score = keras.layers.Activation(keras.activations.sigmoid)(keras.layers.dot([user_rep, candidate_one_vec], axes=-1))
-    model_test = keras.Model([candidate_one] + all_news_input + [user_id], score)
+    model_test = keras.Model(inputs=[candidate_one] + all_news_input + [user_id], outputs=score)
 
     return model, model_test
 
@@ -139,8 +140,8 @@ def train():
     word_embeddings = get_embeddings_from_pretrained(vocab, config.emb_path, emb_dim=300)
 
     # 3. build model
-    model, model_test = build_model(config, n_users=len(u_id2idx), vocab_len=len(vocab), pretrained_emb=word_embeddings)
-    #model = test_model(config)
+    #model, model_test = build_model(config, n_users=len(u_id2idx), vocab_len=len(vocab), pretrained_emb=word_embeddings)
+    model = test_model(config)
 
     # 4. training loop
     results = {}
@@ -152,9 +153,29 @@ def train():
         # test
         testgen = gen_batch_data(test_data, news_as_word_ids, config.batch_size)
         #click_score = model_test.predict_generator(testgen, steps=len(testgen) // config.batch_size, verbose=1)
-        scores = model.predict_generator(testgen, steps=len(testgen) // config.batch_size, verbose=1)
+        #scores = model.predict_generator(testgen, steps=len(testgen) // config.batch_size, verbose=1)
 
-        results[ep] = scores
+        auc = []
+        mrr = []
+        ndcg5 = []
+
+        for test_inputs, labels in gen_batch_data_test(test_data, news_as_word_ids, config.batch_size):
+
+            preds = model.predict(test_inputs)
+            auc.append(roc_auc_score(labels, preds, 0))
+            mrr.append(mrr_score(labels, preds))
+            ndcg5.append(ndcg_score(labels, preds, k=5))
+
+        print("AUC in ep {}: {}".format(ep, auc[-1]))
+        results.append({'auc': auc, 'mrr': mrr, 'ndcg5': ndcg5})
+
+        '''
+        Evaluation: 
+        
+        Option1: adapt model to process test batches with multiple candidates and output scores
+        
+        Option2: adapt test generator to mirror format of org. generator (i.e. one candidate)
+        '''
 
         '''
         all_auc = []
@@ -181,3 +202,4 @@ def train():
 
 if __name__ == "__main__":
     train()
+    print("gg")

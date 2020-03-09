@@ -476,10 +476,13 @@ def generate_batch_data_test(all_test_pn, all_label, all_test_id, batch_size, al
 
             yield ([candidate] + browsed_news_split + [userid], label)
 
-def gen_batch_data(data, news_as_word_ids, batch_size=100, test=False):
+def gen_batch_data(data, news_as_word_ids, batch_size=100, shuffle=True):
 
     #TODO: implement nice and more general dataloader
     n_batches = range(len(data) // batch_size + 1)
+
+    if shuffle:
+        random.shuffle(data)
 
     batches = [(batch_size * i, min(len(data), batch_size * (i + 1))) for i in
                n_batches]
@@ -492,10 +495,7 @@ def gen_batch_data(data, news_as_word_ids, batch_size=100, test=False):
 
         # get candidates
         candidates = np.array(cands) # shape: batch_size X n_candidates X title_len
-        if test:
-            candidates_split = [candidates]
-        else:
-            candidates_split = [candidates[:, k, :] for k in range(candidates.shape[1])] # candidate_split[0].shape := (batch_size, max_title_len)
+        candidates_split = [candidates[:, k, :] for k in range(candidates.shape[1])] # candidate_split[0].shape := (batch_size, max_title_len)
 
         # get history
         hist = np.array(hist)  # shape: batch_size X max_hist_len X max_title_len
@@ -511,7 +511,37 @@ def gen_batch_data(data, news_as_word_ids, batch_size=100, test=False):
         # aggregate to batch
         batch = (candidates_split + history_split + [user_ids], labels)
 
-        yield batch
+        return batch
+
+def gen_batch_data_test(data, news_as_word_ids, batch_size=100, candidate_pos=0):
+    n_batches = range(len(data) // batch_size + 1)
+
+    batches = [(batch_size * i, min(len(data), batch_size * (i + 1))) for i in
+               n_batches]
+
+    for start, stop in batches:
+        # get data for this batch
+        cands, hist, users, labels = zip(*[(news_as_word_ids[data_p['candidates']], news_as_word_ids[data_p['history']],
+                                            data_p['u_id'], data_p['labels'])
+                                           for data_p in
+                                           data[start:stop]])  # return multiple lists from list comprehension
+
+        # get candidates
+        candidates = np.array(cands)  # shape: batch_size X n_candidates X title_len
+        candidate = candidates[:, candidate_pos, :]  # candidate.shape := (batch_size, max_title_len)
+
+        # get history
+        hist = np.array(hist)  # shape: batch_size X max_hist_len X max_title_len
+        history_split = [hist[:, k, :] for k in range(hist.shape[1])]  # shape := (batch_size, max_title_len)
+
+        # get user ids
+        user_ids = np.expand_dims(np.array(users), axis=1)
+
+        # get labels
+        labels = np.array(labels)
+        labels = labels[:, candidate_pos]
+
+    yield ([candidate] + history_split + [user_ids], labels)
 
 
 def main(config):
@@ -575,7 +605,7 @@ if __name__ == "__main__":
     parser.add_argument('--data_type', type=str, default='DPG',
                         help='options for data format: DPG, NPA or Adressa ')
     parser.add_argument('--data_path', type=str, default='../datasets/dpg/i10k_u5k_s30/',
-                        help='path to data directory')
+                        help='path to data directory') #dpg/i10k_u5k_s30/
 
     parser.add_argument('--article_ids', type=str, default='../datasets/dpg/i10k_u5k_s30/item_ids.pkl',
                         help='path to directory with item id pickle file')
