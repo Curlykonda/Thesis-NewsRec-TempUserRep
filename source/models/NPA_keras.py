@@ -8,10 +8,10 @@ from keras import backend as K
 from keras.optimizers import *
 from sklearn.model_selection import train_test_split
 
-from metrics import *
+from ..metrics import mrr_score, ndcg_score
 from sklearn.metrics import roc_auc_score
 
-from utils_npa import gen_batch_data, prep_dpg_user_file, generate_npa_batch_data_train, get_embeddings_from_pretrained, \
+from ..utils_npa import gen_batch_data, prep_dpg_user_file, generate_npa_batch_data_train, get_embeddings_from_pretrained, \
     gen_batch_data_test
 
 npratio = 4
@@ -163,8 +163,8 @@ def train():
 
             preds = model.predict(test_inputs)
             auc.append(roc_auc_score(labels, preds, 0))
-            mrr.append(mrr_score(labels, preds))
-            ndcg5.append(ndcg_score(labels, preds, k=5))
+            mrr.append(metrics.mrr_score(labels, preds))
+            ndcg5.append(metrics.ndcg_score(labels, preds, k=5))
 
         print("AUC in ep {}: {}".format(ep, auc[-1]))
         results.append({'auc': auc, 'mrr': mrr, 'ndcg5': ndcg5})
