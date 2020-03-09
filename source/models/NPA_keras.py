@@ -8,13 +8,12 @@ from keras import backend as K
 from keras.optimizers import *
 from sklearn.model_selection import train_test_split
 import sys
-sys.path.append('source')
+sys.path.append('thesis-user-modelling/')
 
-from metrics import mrr_score, ndcg_score
+from source.metrics import mrr_score, ndcg_score
 from sklearn.metrics import roc_auc_score
 
-from utils_npa import gen_batch_data, prep_dpg_user_file, generate_npa_batch_data_train, get_embeddings_from_pretrained, \
-    gen_batch_data_test
+from source.utils_npa import gen_batch_data, prep_dpg_user_file, get_embeddings_from_pretrained, gen_batch_data_test
 
 npratio = 4
 results = []
@@ -142,8 +141,8 @@ def train():
     word_embeddings = get_embeddings_from_pretrained(vocab, config.emb_path, emb_dim=300)
 
     # 3. build model
-    model, model_test = build_model(config, n_users=len(u_id2idx), vocab_len=len(vocab), pretrained_emb=word_embeddings)
-    #model = test_model(config)
+    #model, model_test = build_model(config, n_users=len(u_id2idx), vocab_len=len(vocab), pretrained_emb=word_embeddings)
+    model = test_model(config)
 
     # 4. training loop
     results = {}

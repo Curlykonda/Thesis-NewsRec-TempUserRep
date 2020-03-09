@@ -12,15 +12,14 @@ import random
 import itertools
 import numpy as np
 import pickle
-from numpy.linalg import cholesky
 
 import fasttext
 
-from utils import get_art_id_from_dpg_history, build_vocab_from_word_counts, pad_sequence, reverse_mapping_dict
+from source.utils import get_art_id_from_dpg_history, build_vocab_from_word_counts, pad_sequence, reverse_mapping_dict
 from sklearn.model_selection import train_test_split
-from sklearn.feature_extraction.text import CountVectorizer, TfidfVectorizer
+#from sklearn.feature_extraction.text import CountVectorizer, TfidfVectorizer
 
-import heapq
+
 
 DATA_TYPES = ["NPA", "DPG", "Adressa"]
 
