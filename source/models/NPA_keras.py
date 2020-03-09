@@ -140,8 +140,8 @@ def train():
     word_embeddings = get_embeddings_from_pretrained(vocab, config.emb_path, emb_dim=300)
 
     # 3. build model
-    #model, model_test = build_model(config, n_users=len(u_id2idx), vocab_len=len(vocab), pretrained_emb=word_embeddings)
-    model = test_model(config)
+    model, model_test = build_model(config, n_users=len(u_id2idx), vocab_len=len(vocab), pretrained_emb=word_embeddings)
+    #model = test_model(config)
 
     # 4. training loop
     results = {}
