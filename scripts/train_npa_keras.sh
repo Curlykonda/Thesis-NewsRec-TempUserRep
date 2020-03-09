@@ -13,7 +13,7 @@ module load Miniconda3/4.3.27
 #module load NCCL/2.0.5-CUDA-9.0.176
 #module load Python
 
-source activate thesis-user-modelling
+source activate npa-keras
 
 workdir=$PWD
 
