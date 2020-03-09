@@ -15,16 +15,16 @@ module load Miniconda3/4.3.27
 
 source activate npa-keras
 
-workdir=$PWD
+workdir=$PWD/source/
 
 #[ -f /etc/resolv.conf ] && echo "File exists" || echo "File does NOT exist"
 
 
-cd $workdir/source/models
+cd $workdir
 
 python --version
 
-python -u NPA_keras.py 
+python -u models/NPA_keras.py
 
 #cp -r $outdir $workdir
 

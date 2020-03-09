@@ -8,10 +8,10 @@ from keras import backend as K
 from keras.optimizers import *
 from sklearn.model_selection import train_test_split
 
-from ..metrics import mrr_score, ndcg_score
+from source.metrics import mrr_score, ndcg_score
 from sklearn.metrics import roc_auc_score
 
-from ..utils_npa import gen_batch_data, prep_dpg_user_file, generate_npa_batch_data_train, get_embeddings_from_pretrained, \
+from source.utils_npa import gen_batch_data, prep_dpg_user_file, generate_npa_batch_data_train, get_embeddings_from_pretrained, \
     gen_batch_data_test
 
 npratio = 4
