@@ -9,7 +9,7 @@ from source.modules.click_predictor import SimpleDot
 
 import torch
 import torch.nn as nn
-import torch.functional as F
+import torch.nn.functional as F
 
 
 class NPA(torch.nn.Module):
@@ -53,10 +53,15 @@ class NPA_wu(nn.Module):
         self.dim_emb_user_id = emb_dim_user_id
         self.dim_pref_q = emb_dim_pref_query
 
-        self.word_embeddings = nn.Embedding(vocab_len, emb_dim_words, _weight=pretrained_emb)  # word embeddings
+        if pretrained_emb:
+            assert pretrained_emb.shape == [vocab_len, emb_dim_words]
+            self.word_embeddings = nn.Embedding.from_pretrained(torch.FloatTensor(pretrained_emb), freeze=False, padding_idx=0)      # word embeddings
+        else:
+            self.word_embeddings = nn.Embedding(vocab_len, emb_dim_words)
+
         self.user_id_embeddings = nn.Embedding(n_users, self.dim_emb_user_id, padding_idx=0)
 
-        self.news_encoder = CNN_wu(max_title_len*emb_dim_words, n_filters_cnn, emb_dim_pref_query, dropout_p) # news encoder
+        self.news_encoder = CNN_wu(in_size=(max_title_len*emb_dim_words), n_filters=n_filters_cnn, dim_pref_q=emb_dim_pref_query, dropout_p=dropout_p) # news encoder
 
         # preference queries
         self.pref_q_word = PrefQuery_wu(self.dim_pref_q, self.dim_emb_user_id)
@@ -113,9 +118,9 @@ class PrefQuery_wu(nn.Module):
         assert activation in ['relu', 'tanh']
 
         if activation == 'relu':
-            self.activation = F.relu()
+            self.activation = nn.Tanh()
         elif activation == 'tanh':
-            self.activation = F.tanh()
+            self.activation = nn.Tanh()
         else:
             raise KeyError()
 
@@ -130,8 +135,8 @@ class CNN_wu(nn.Module):
         super(CNN_wu, self).__init__()
 
         self.cnn_encoder = nn.Sequential(
-            nn.Conv1D(in_size, n_filters, kernel_size=kernel, stride=stride, padding_mode='same'),
-                        F.relu,
+            nn.Conv1d(in_size, n_filters, kernel_size=int(kernel), stride=stride, padding_mode='zeros'),
+                        nn.ReLU(),
                         nn.Dropout(p=dropout_p)
         )
 
@@ -160,7 +165,7 @@ class PersonalisedAttention(nn.Module):
 
         self.proj_pref_q = nn.Sequential(
             nn.Linear(dim_pref_q, dim_news_rep),
-            F.tanh()
+            nn.Tanh()
         )
 
     def forward(self, enc_input, pref_q):
