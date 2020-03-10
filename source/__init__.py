@@ -1,3 +1,2 @@
-from . import layers
+from . import modules
 from . import models
-from . import train_scripts

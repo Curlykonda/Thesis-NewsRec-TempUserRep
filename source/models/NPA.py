@@ -4,6 +4,9 @@ import numpy as np
 from source.utils_npa import *
 from source.metrics import *
 
+from source.modules.click_predictor import SimpleDot
+
+
 import torch
 import torch.nn as nn
 import torch.functional as F
@@ -36,7 +39,6 @@ class NPA(torch.nn.Module):
 
         return score
 
-
 class NPA_wu(nn.Module):
 
     def __init__(self, n_users, vocab_len, pretrained_emb, emb_dim_user_id=50, emb_dim_pref_query=200,
@@ -46,51 +48,81 @@ class NPA_wu(nn.Module):
         self.vocab_len = vocab_len
         self.max_title_len = max_title_len
 
-        # word embeddings
-        self.word_embeddings = nn.Embedding(vocab_len, emb_dim_words, _weight=pretrained_emb)
+        self.dim_news_rep = n_filters_cnn
+        self.dim_user_rep = n_filters_cnn
+        self.dim_emb_user_id = emb_dim_user_id
+        self.dim_pref_q = emb_dim_pref_query
 
-        # news encoder
-        self.news_encoder = CNN_wu(max_title_len*emb_dim_words, n_filters_cnn, emb_dim_pref_query)
+        self.word_embeddings = nn.Embedding(vocab_len, emb_dim_words, _weight=pretrained_emb)  # word embeddings
+        self.user_id_embeddings = nn.Embedding(n_users, self.dim_emb_user_id, padding_idx=0)
 
-        # preference query
-        self.user_emb = UserEmbeddingLayer(n_users, emb_dim_user_id, emb_dim_pref_query)
+        self.news_encoder = CNN_wu(max_title_len*emb_dim_words, n_filters_cnn, emb_dim_pref_query, dropout_p) # news encoder
 
-        # user representation
+        # preference queries
+        self.pref_q_word = PrefQuery_wu(self.dim_pref_q, self.dim_emb_user_id)
+        self.pref_q_article = PrefQuery_wu(self.dim_pref_q, self.dim_emb_user_id)
 
+        self.user_encoder = PersonalisedAttention(emb_dim_pref_query, self.dim_news_rep) # user representation
 
-        # click predictor
+        self.click_predictor = SimpleDot(self.dim_user_rep, self.dim_news_rep)  # click predictor
 
-        pass
+    def forward(self, brows_hist_as_ids, candidates_as_ids, user_id):
 
-    def forward(self):
+        brows_hist_reps = self.encode_news(brows_hist_as_ids, user_id)
 
-        pass
+        candidate_reps = self.encode_news(candidates_as_ids, user_id)
+
+        user_rep = self.create_user_rep(brows_hist_reps, user_id)
+
+        click_scores = self.click_predictor(user_rep, candidate_reps)
+
+        return click_scores
+
 
     def encode_news(self, news_articles_as_ids, user_id):
 
         emb_news = self.word_embeddings(news_articles_as_ids)
 
-        pref_q_word, _ = self.user_emb(user_id)
+        pref_q_word = self.pref_q_word(user_id)
 
         encoded_articles = self.news_encoder(emb_news, pref_q_word)
 
         return encoded_articles
 
-class UserEmbeddingLayer(nn.Module):
+    def create_user_rep(self, encoded_brows_hist, user_id):
 
-    def __init__(self, n_users, emb_dim_user_id=50, dim_pref_query=200):
-        super(UserEmbeddingLayer, self).__init__()
+        pref_q_article = self.pref_q_article(user_id)
 
-        self.n_users = n_users
+        user_rep = self.user_encoder(encoded_brows_hist, pref_q_article)
+
+        return user_rep
+
+class PrefQuery_wu(nn.Module):
+    '''
+    Given an embedded user id, create a preference query vector (that is used in personalised attention)
+
+    '''
+    def __init__(self, dim_pref_query=200, dim_emb_u_id=50, activation='relu'):
+        super(PrefQuery_wu, self).__init__()
+
         self.dim_pref_query = dim_pref_query
+        self.dim_u_id = dim_emb_u_id
 
-        self.user_embedding = nn.Embedding(n_users, emb_dim_user_id, padding_idx=0)
-        self.dense_pref_word = nn.Linear(emb_dim_user_id, dim_pref_query) # NN #1
-        self.dense_pref_article = nn.Linear(emb_dim_user_id, dim_pref_query) # NN #2
+        self.lin_proj = nn.Linear(self.dim_u_id, self.dim_pref_query)
 
-    def forward(self, user_id):
-        u_emb = self.user_embedding(user_id)
-        return F.relu(self.dense_pref_word(u_emb)), F.relu(self.dense_pref_article(u_emb))
+        assert activation in ['relu', 'tanh']
+
+        if activation == 'relu':
+            self.activation = F.relu()
+        elif activation == 'tanh':
+            self.activation = F.tanh()
+        else:
+            raise KeyError()
+
+    def forward(self, u_id):
+        pref_query = self.lin_proj(u_id)
+
+        return self.activation(pref_query)
 
 class CNN_wu(nn.Module):
 
@@ -119,24 +151,6 @@ class CNN_wu(nn.Module):
         return torch.cat(contextual_rep, axis=1)
 
 
-class UserEncoder_wu(nn.Module):
-    def __init__(self, dim_pref_q, dim_news_rep):
-        super(UserEncoder_wu, self).__init__()
-
-        self.dim_pref_q = dim_pref_q
-        self.dim_news_rep = dim_news_rep
-
-        self.proj_pref_q = nn.Sequential(
-            nn.Linear(dim_pref_q, dim_news_rep),
-            F.tanh()
-        )
-
-    def forward(self, contextual_news_rep, pref_q):
-
-
-
-        pass
-
 class PersonalisedAttention(nn.Module):
     def __init__(self, dim_pref_q, dim_news_rep):
         super(PersonalisedAttention, self).__init__()
@@ -148,8 +162,6 @@ class PersonalisedAttention(nn.Module):
             nn.Linear(dim_pref_q, dim_news_rep),
             F.tanh()
         )
-
-        self.softmax = F.softmax()
 
     def forward(self, enc_input, pref_q):
 

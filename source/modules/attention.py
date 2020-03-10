@@ -15,7 +15,7 @@ https://doi.org/10.18653/v1/P17-4012
 
 
 def clones(module, N):
-    "Produce N identical layers."
+    "Produce N identical modules."
     return nn.ModuleList([copy.deepcopy(module) for _ in range(N)])
 
 def attention(query, key, value, mask=None, dropout=None):

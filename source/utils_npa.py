@@ -542,6 +542,26 @@ def gen_batch_data_test(data, news_as_word_ids, batch_size=100, candidate_pos=0)
 
     yield ([candidate] + history_split + [user_ids], labels)
 
+def get_labels_from_data(data):
+    labels = {}
+    for entry_dict in data: #columns = ["u_id", "history", "candidates", "labels"]
+        labels[entry_dict['u_id']] = entry_dict['labels']
+    return labels
+
+def get_dpg_data(path_article_data, path_user_data, neg_sample_ratio, max_hist_len, max_len_news_title=30, min_counts_for_vocab=2):
+
+    vocab, news_as_word_ids, art_id2idx = preprocess_dpg_news_file(news_file=path_article_data,
+                                                                   tokenizer=word_tokenize,
+                                                                   min_counts_for_vocab=min_counts_for_vocab,
+                                                                   max_len_news_title=max_len_news_title)
+
+    with open(config.data_path + "news_prepped.pkl", 'wb') as fout:
+        pickle.dump((vocab, news_as_word_ids, art_id2idx), fout)
+
+    u_id2idx, data = prep_dpg_user_file(path_user_data, set(art_id2idx.keys()), art_id2idx,
+                                        npratio=neg_sample_ratio, max_hist_len=max_hist_len)
+
+    return data, get_labels_from_data(data), vocab, news_as_word_ids, art_id2idx, u_id2idx
 
 def main(config):
 
@@ -581,8 +601,8 @@ def main(config):
 
         u_id2idx, data = prep_dpg_user_file(config.user_data, set(art_id2idx.keys()), art_id2idx, npratio=config.neg_sample_ratio, max_hist_len=config.max_hist_len)
 
-        idx2u_id = reverse_mapping_dict(u_id2idx)
-        idx2art_id = reverse_mapping_dict(art_id2idx)
+        #idx2u_id = reverse_mapping_dict(u_id2idx)
+        #idx2art_id = reverse_mapping_dict(art_id2idx)
 
         train_data, test_data = train_test_split(data, test_size=0.2, shuffle=True, random_state=42)
 
