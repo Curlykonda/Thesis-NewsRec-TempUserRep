@@ -26,178 +26,17 @@ DATA_TYPES = ["NPA", "DPG", "Adressa"]
 FILE_NAMES_NPA = {"click": "ClickData_sample.tsv", "news": "DocMeta_sample.tsv"}
 
 
-def newsample(nnn, ratio):
+def sample_n_from_elements(elements, ratio):
     '''
 
-    :param nnn: collection of elements from which to sample, e.g. article id for neg impressions
+    :param elements: collection of elements from which to sample, e.g. article id for neg impressions
     :param ratio: total number of samples to be returned
     :return: random sample of size 'ratio' from the given collection 'nnn'
     '''
-    if ratio > len(nnn):
-        return random.sample(nnn * (ratio // len(nnn) + 1), ratio) # expand sequence with duplicates so that we can sample enough elems
+    if ratio > len(elements):
+        return random.sample(elements * (ratio // len(elements) + 1), ratio) # expand sequence with duplicates so that we can sample enough elems
     else:
-        return random.sample(nnn, ratio)
-
-def preprocess_npa_user_file(click_file='ClickData4.tsv', npratio=4, max_hist_len=50):
-    '''
-
-    :param click_file: path to file containing user click data
-    :param npratio: ratio of negative samples, i.e. for each positive sample add N negative examples (randomly sampled articles)
-    :param max_hist_len: maximum number of articles in user history; shorter sequences are padded with 0, longer ones are truncated
-    :return:
-    '''
-    userid_dict = {}
-    with open(click_file) as f:
-        userdata = f.readlines()
-    for user in userdata:
-        line = user.strip().split('\t')
-        userid = line[0]
-        # map user_id to index
-        if userid not in userid_dict:
-            userid_dict[userid] = len(userid_dict)
-
-    user_ids_train = []
-    candidates_train = []
-    labels_train = []
-    user_hist_pos_train = []
-
-    user_ids_test = []
-    candidates_test = []
-    labels_test = []
-    indices_test = []
-    user_hist_pos_test = []
-
-    all_news_ids = set() # collect all occurring article ids
-
-    for user in userdata:
-        line = user.strip().split('\t')
-        userid = line[0]
-        # split userdata in impressions
-        # format:
-        # id #TAB# 'more ids seperated by spaces' #TAB# 'date' space 'time' #N# ...
-        # probably #N# indicates new impression
-        # line[2] is used for train samples
-        # line[3] is used for test samples
-        if len(line) == 4:
-            impre = [x.split('#TAB#') for x in line[2].split('#N#')]
-        if len(line) == 3:
-            impre = [x.split('#TAB#') for x in line[2].split('#N#')]
-        else:
-            # raise NotImplementedError()  # HB edit
-            pass
-
-        # aggregate article ids of positive and neg impressions
-        trainpos = [x[0].split() for x in impre]  # first element in that list has been clicked
-        trainneg = [x[1].split() for x in impre]  # other elements have not been clicked, so use as 'neg' example
-
-        # preserves browsing order of articles, last one at last pos in list
-        poslist = [int(x) for x in list(itertools.chain(*(trainpos)))]
-        neglist = [int(x) for x in list(itertools.chain(*(trainneg)))]
-
-        # add news indices
-        all_news_ids.update(poslist)
-
-        # extract test samples from the raw data
-        if len(line) == 4:
-            testimpre = [x.split('#TAB#') for x in line[3].split('#N#')]
-            testpos = [x[0].split() for x in testimpre]
-            testneg = [x[1].split() for x in testimpre]
-
-            all_news_ids.update(*testpos)
-            all_news_ids.update(*testneg)
-
-            for i in range(len(testpos)):
-                sess_index = []
-                sess_index.append(len(candidates_test))
-                posset = list(set(poslist))
-
-                # randomly select impressions from history
-                allpos = [int(p) for p in random.sample(posset, min(max_hist_len, len(posset)))[:max_hist_len]]
-                allpos += [0] * (max_hist_len - len(allpos))  # pad shorter sequences
-
-                for j in testpos[i]:
-                    candidates_test.append(int(j))
-                    labels_test.append(1) # pos label := 1
-                    user_ids_test.append(userid_dict[userid])
-                    user_hist_pos_test.append(allpos)
-
-                # add all neg test impression at this position to
-                for j in testneg[i]:
-                    candidates_test.append(int(j))
-                    labels_test.append(0) # neg label := 0  (not clicked)
-                    user_ids_test.append(userid_dict[userid])
-                    user_hist_pos_test.append(allpos) # why add all positive instances here?
-
-                sess_index.append(len(candidates_test))
-                # sess_index indicates start and end index of a session
-                # length of session determined by the number of pos + neg test impressions
-                indices_test.append(sess_index)
-
-        #HB check
-        if len(poslist) != len(trainpos):
-            # these collections can be of different length because we're unpacking the values into 'poslist'
-            pass
-
-        for impre_id in range(len(trainpos)):
-            for pos_sample in trainpos[impre_id]:
-
-                pos_neg_sample = newsample(trainneg[impre_id], npratio) # generate negative samples
-                pos_neg_sample.append(pos_sample)
-
-                temp_label = [0] * npratio + [1]
-                temp_id = list(range(npratio + 1))
-                random.shuffle(temp_id)
-
-                shuffle_sample = []
-                shuffle_label = []
-                # shuffle article ids with corresponding label
-                for id in temp_id:
-                    shuffle_sample.append(int(pos_neg_sample[id]))
-                    shuffle_label.append(temp_label[id])
-
-                posset = list(set(poslist) - set([pos_sample])) # remove positive sample from user history
-
-                # sample random elems from set of pos impressions -> does order matter?
-                allpos = [int(p) for p in random.sample(posset, min(max_hist_len, len(posset)))[:max_hist_len]]
-                allpos += [0] * (max_hist_len - len(allpos))
-                candidates_train.append(shuffle_sample) # ids of candidate items
-                labels_train.append(shuffle_label)
-                user_ids_train.append(userid_dict[userid])
-                user_hist_pos_train.append(allpos)
-
-                # add news ids to grand set
-                all_news_ids.update(shuffle_sample)
-                #all_news_ids.update(allpos)
-
-                #if DEBUG
-                if len(candidates_train) % 1e3 == 0:
-                    print("Train pn: {}".format(candidates_train[-1]))
-                    print("Labels: {}".format(labels_train[-1]))
-                    print("Pos: {}".format(user_hist_pos_train[-1]))
-
-    #reformat to np int arrays
-
-    candidates_train = np.array(candidates_train, dtype='int32')
-    labels_train = np.array(labels_train, dtype='int32')
-    user_ids_train = np.array(user_ids_train, dtype='int32')
-
-    candidates_test = np.array(candidates_test, dtype='int32')
-    labels_test = np.array(labels_test, dtype='int32')
-    user_ids_test = np.array(user_ids_test, dtype='int32')
-    user_hist_pos_train = np.array(user_hist_pos_train, dtype='int32')
-    user_hist_pos_test = np.array(user_hist_pos_test, dtype='int32')
-
-    # TODO: simplify the data format. put corresponding instacnes into one dict with a running index (e.g. train_pn, label, train_id, user_pos)
-    columns = ["u_id", "history", "candidates", "labels"]
-    train_data = [{'u_id': u_id, 'history': hist, 'candidates': cand, 'labels': lbl} for u_id, hist, cand, lbl
-                    in zip(user_ids_train, user_hist_pos_train, candidates_train, labels_train)]
-
-    test_data = [{'u_id': u_id, 'history': hist, 'candidates': cand, 'labels': lbl} for u_id, hist, cand, lbl
-                    in zip(user_ids_test, user_hist_pos_test, candidates_test, labels_test)]
-
-    return userid_dict, candidates_train, labels_train, user_ids_train, \
-           candidates_test, labels_test, user_ids_test, \
-           user_hist_pos_train, user_hist_pos_test, indices_test, all_news_ids
+        return random.sample(elements, ratio)
 
 def prep_dpg_user_file(user_file, all_article_ids, art_id2idx, npratio=4, max_hist_len=50):
 
@@ -222,7 +61,7 @@ def prep_dpg_user_file(user_file, all_article_ids, art_id2idx, npratio=4, max_hi
         for pos_sample in pos_impre:
 
             # generate negative samples
-            candidate_articles = [art_id2idx[art_id] for art_id in newsample(all_article_ids, npratio)]
+            candidate_articles = [art_id2idx[art_id] for art_id in sample_n_from_elements(all_article_ids, npratio)]
             candidate_articles.append(pos_sample)
             labels = [0] * npratio + [1] # create temp labels
             candidate_articles = list(zip(candidate_articles, labels)) # zip art_id and label
@@ -254,49 +93,6 @@ def prep_dpg_user_file(user_file, all_article_ids, art_id2idx, npratio=4, max_hi
                     in zip(user_ids_train, user_hist_pos_train, candidates_train, labels_train)]
 
     return u_id2idx, data
-
-def preprocess_npa_news_file(news_file='DocMeta3.tsv', min_counts_for_vocab=2, max_len_news_title=30):
-    with open(news_file) as f:
-        newsdata = f.readlines()
-
-    news = {}
-    for newsline in newsdata:
-        line = newsline.strip().split('\t')
-        news[line[1]] = [line[2], line[3], word_tokenize(line[6].lower())]
-    word_dict_raw = {'PADDING': [0, 999999]}  # key: 'word', value: [index, counts]
-
-    for docid in news:
-        for word in news[docid][2]:
-            if word in word_dict_raw:
-                word_dict_raw[word][1] += 1
-            else:
-                word_dict_raw[word] = [len(word_dict_raw), 1]
-    word_dict = {}
-    for i in word_dict_raw:
-        # only include word with counter > 2
-        if word_dict_raw[i][1] >= min_counts_for_vocab:
-            word_dict[i] = [len(word_dict), word_dict_raw[i][1]]
-    print("Vocab: {}  Raw: {}".format(len(word_dict), len(word_dict_raw)))
-
-    news_words = [[0] * max_len_news_title]  # encoded news title
-    news_index = {'0': 0}  # dictionary news indices
-    for newsid in news:
-        word_id = []
-        news_index[newsid] = len(news_index)
-        # get word_ids from news title
-        for word in news[newsid][2]:
-            # if word occurs in vocabulary, add the id
-            # unknown words are omitted
-            if word in word_dict:
-                word_id.append(word_dict[word][0])
-
-        # pad sequence
-        word_id = word_id[:max_len_news_title]  # max_len_news_title
-        news_words.append(word_id + [0] * (max_len_news_title - len(word_id)))  # note: 0 as padding value
-
-    news_words = np.array(news_words, dtype='int32')
-
-    return word_dict, news_words, news_index
 
 def preprocess_dpg_news_file(news_file, tokenizer, min_counts_for_vocab=2, max_len_news_title=30, max_vocab_size=30000):
 
@@ -351,54 +147,6 @@ def preprocess_dpg_news_file(news_file, tokenizer, min_counts_for_vocab=2, max_l
 
     return vocab, news_as_word_ids, art_id2idx
 
-def get_embedding(word_dict, emb_path):
-    embedding_dict = {}
-
-    # emb_path = '/data/wuch/glove.840B.300d.txt'
-
-    # for each word in vocabulary, look up and store glove embedding vector
-    # words from dictionary that don't appear in Glove are discarded (?)
-    cnt = 0
-    with open(emb_path, 'rb') as f:
-        linenb = 0
-        while True:
-            line = f.readline()
-            if len(line) == 0:
-                break
-            line = line.split()
-            word = line[0].decode()
-            linenb += 1
-            if len(word) != 0:
-                vec = [float(x) for x in line[1:]]
-                # only store words that appear in dictionary
-                if word in word_dict:
-                    embedding_dict[word] = vec
-                    if cnt % 1000 == 0:
-                        print(cnt, linenb, word)
-                    cnt += 1
-
-    embedding_matrix = [0] * len(word_dict)
-    cand = []
-    # convert embedding dict into matrix
-    # pretrained values are floats
-    #
-    for i in embedding_dict:
-        embedding_matrix[word_dict[i][0]] = np.array(embedding_dict[i], dtype='float32')
-        cand.append(embedding_matrix[word_dict[i][0]])
-    cand = np.array(cand, dtype='float32')
-    mu = np.mean(cand, axis=0)
-    Sigma = np.cov(cand.T)
-    norm = np.random.multivariate_normal(mu, Sigma, 1)
-    for i in range(len(embedding_matrix)):
-        # if embedding is int, i.e. no pretrained value, initialise with values from normal distribution
-        if type(embedding_matrix[i]) == int:
-            embedding_matrix[i] = np.reshape(norm, 300)
-    embedding_matrix[0] = np.zeros(300, dtype='float32')  # placeholder with zero values (?)
-    embedding_matrix = np.array(embedding_matrix, dtype='float32')
-    print("Shape Embedding matrix: {}".format(embedding_matrix.shape))
-
-    return embedding_matrix
-
 def get_embeddings_from_pretrained(vocab, emb_path, emb_dim=300):
     try:
         ft = fasttext.load_model(emb_path) # load pretrained vectors
@@ -422,42 +170,6 @@ def get_embeddings_from_pretrained(vocab, emb_path, emb_dim=300):
         print("Could not load word embeddings")
 
         return None
-
-def generate_npa_batch_data_train(all_train_pn, all_label, all_train_id, batch_size, all_user_pos, news_words):
-    inputid = np.arange(len(all_label))
-    np.random.shuffle(inputid)
-    y = all_label
-    batches = [inputid[range(batch_size * i, min(len(y), batch_size * (i + 1)))] for i in
-               range(len(y) // batch_size + 1)]
-
-    while (True):
-        for sample_indices in batches:
-            '''
-            What should happen here now? 
-            1) Sample indices indicate which training samples to use from 'all_train_pn'
-            2) Each entry in 'all_train_pn' contains candidate article ids that can complete the sequence, but only one is correct
-            3) 'news_words' is a lookup containing the encoded news title for all articles. 
-                In the provided sample data, however, we only have a small subset of all news articles (n=51), while the highest (listed) article_id is 42232.
-            4) Split the 'candidates' into slices
-            5) Get title encoding for all articles in reading histories (contained in 'all_user_pos')
-            6) Split 'browsed_news' into slices
-            7) Get 'user_ids'
-            8) Get 'labels'  
-            '''
-
-            candidate = news_words[all_train_pn[sample_indices]] # shape: batch_size X n_candidates X title_len
-            candidate_split = [candidate[:, k, :] for k in range(candidate.shape[1])] #candidate_split[0].shape := (batch_size, max_title_len)
-
-            # retrieve reading histories for the sample indices
-            browsed_news = news_words[all_user_pos[sample_indices]] # given article_ids for a user, retrieve the news title vector
-            browsed_news_split = [browsed_news[:, k, :] for k in range(browsed_news.shape[1])]
-
-            # get user_ids
-            user_ids = np.expand_dims(all_train_id[sample_indices], axis=1) # expand dimensions to make 2D array
-            label = all_label[sample_indices]
-
-            #yield (candidate_split + browsed_news_split + [userid], label)
-            return (candidate_split + browsed_news_split + [user_ids], label)
 
 def generate_batch_data_test(all_test_pn, all_label, all_test_id, batch_size, all_test_user_pos, news_words):
     inputid = np.arange(len(all_label))
@@ -568,18 +280,7 @@ def main(config):
     if config.data_type not in DATA_TYPES:
         raise KeyError("{} is not a known data format".format(config.data_type))
 
-    if config.data_type == "NPA":
-        # use NPA sample data -> NOTE: cannot train model due to insufficient data!
-        userid_dict, all_train_pn, all_label, all_train_id, \
-        all_test_pn, all_test_label, all_test_id, \
-        all_user_pos, all_test_user_pos, all_test_index, all_news_ids \
-            = preprocess_npa_user_file(click_file=config.data_path + FILE_NAMES_NPA["click"])
-
-        word_dict, news_words, news_index = preprocess_npa_news_file(news_file=config.data_path + FILE_NAMES_NPA["news"])
-
-        traingen = generate_npa_batch_data_train(all_train_pn, all_label, all_train_id, 100, all_user_pos, news_words)
-
-    elif config.data_type == "DPG":
+    if config.data_type == "DPG":
         # use DPG data
 
         # load & prep news data
@@ -612,8 +313,6 @@ def main(config):
     elif config.data_type == "Adressa":
         # use Adressa data
         raise NotImplementedError()
-
-    return traingen
 
 
 
