@@ -61,7 +61,7 @@ class NPA_wu(nn.Module):
 
         self.user_id_embeddings = nn.Embedding(n_users, self.dim_emb_user_id, padding_idx=0)
 
-        self.news_encoder = CNN_wu(in_size=(max_title_len*emb_dim_words), n_filters=n_filters_cnn, dim_pref_q=emb_dim_pref_query, dropout_p=dropout_p) # news encoder
+        self.news_encoder = CNN_wu(n_filters=n_filters_cnn, word_emb_dim=emb_dim_words, dim_pref_q=emb_dim_pref_query, dropout_p=dropout_p) # news encoder
 
         # preference queries
         self.pref_q_word = PrefQuery_wu(self.dim_pref_q, self.dim_emb_user_id)
@@ -88,7 +88,7 @@ class NPA_wu(nn.Module):
 
         emb_news = self.word_embeddings(news_articles_as_ids)
 
-        pref_q_word = self.pref_q_word(user_id)
+        pref_q_word = self.pref_q_word(self.user_id_embeddings(user_id))
 
         encoded_articles = self.news_encoder(emb_news, pref_q_word)
 
@@ -96,7 +96,7 @@ class NPA_wu(nn.Module):
 
     def create_user_rep(self, encoded_brows_hist, user_id):
 
-        pref_q_article = self.pref_q_article(user_id)
+        pref_q_article = self.pref_q_article(self.user_id_embeddings(user_id))
 
         user_rep = self.user_encoder(encoded_brows_hist, pref_q_article)
 
@@ -125,17 +125,21 @@ class PrefQuery_wu(nn.Module):
             raise KeyError()
 
     def forward(self, u_id):
-        pref_query = self.lin_proj(u_id)
+        #print(u_id.shape)
+        pref_query = self.lin_proj(u_id) # batch_size X u_id_emb_dim
 
         return self.activation(pref_query)
 
 class CNN_wu(nn.Module):
 
-    def __init__(self, in_size, n_filters=400, dim_pref_q=200, kernel=3, stride=1, dropout_p=0.2):
+    def __init__(self, n_filters=400, dim_pref_q=200, word_emb_dim=300, kernel_size=3, dropout_p=0.2):
         super(CNN_wu, self).__init__()
 
-        self.cnn_encoder = nn.Sequential(
-            nn.Conv1d(in_size, n_filters, kernel_size=int(kernel), stride=stride, padding_mode='zeros'),
+        self.n_filters = n_filters
+        self.dim_pref_q = dim_pref_q
+        self.word_emb_dim = word_emb_dim
+
+        self.cnn_encoder = nn.Sequential(nn.Conv1d(1, n_filters, kernel_size=(kernel_size, word_emb_dim), padding=(kernel_size - 2, 0)),
                         nn.ReLU(),
                         nn.Dropout(p=dropout_p)
         )
@@ -144,16 +148,23 @@ class CNN_wu(nn.Module):
 
     def forward(self, embedded_news, pref_query):
         contextual_rep = []
+    # embedded_news.shape = batch_size X max_hist_len X max_title_len X word_emb_dim
+
         # encode each browsed news article and concatenate
         for n_news in range(embedded_news.shape[1]):
-            encoded_news = self.cnn_encoder(embedded_news[:, n_news, :])
+
+            # concatenate words
+            article_one = embedded_news[:, n_news, :, :].squeeze() # shape = (batch_size, title_len, emb_dim)
+
+            encoded_news = self.cnn_encoder(article_one.unsqueeze(1))
+            # encoded_news.shape = batch_size X n_cnn_filters X max_title_len
 
             #pers attn
-            contextual_rep.append(self.pers_attn_word(pref_query, encoded_news))
+            contextual_rep.append(self.pers_attn_word(encoded_news.squeeze(), pref_query))
 
-            #torch.bmm(A.view(6, 1, 256), B.view(6, 256, 1)) should do the trick! http://pytorch.org/docs/0.2.0/torch.html#torch.bmm
+            assert contextual_rep[-1].shape[1] == self.n_filters # batch_size X n_cnn_filters
 
-        return torch.cat(contextual_rep, axis=1)
+        return torch.stack(contextual_rep, axis=2) # batch_s X dim_news_rep X history_len
 
 
 class PersonalisedAttention(nn.Module):
@@ -170,8 +181,15 @@ class PersonalisedAttention(nn.Module):
 
     def forward(self, enc_input, pref_q):
 
-        attn_a = torch.matmul(enc_input, self.proj_pref_q(pref_q))  # dimesions? Dot(2,1)?
-        attn_weights = F.softmax(attn_a)
-        attn_w_rep = (torch.matmul(attn_weights, enc_input)) # attention-weighted representation
+        # enc_input.shape = (batch_size, dim_news_rep, title_len)
+
+        pref_q = self.proj_pref_q(pref_q) # transform pref query
+
+        attn_a = torch.bmm(torch.transpose(enc_input, 1, 2), pref_q.unsqueeze(2)).squeeze() # dot product over batch http://pytorch.org/docs/0.2.0/torch.html#torch.bmm
+        attn_weights = F.softmax(attn_a, dim=-1)
+
+        #assert torch.sum(attn_weights, dim=1) == torch.ones(attn_weights.shape[0], dtype=float) # (normalised) attn weights should sum to 1
+
+        attn_w_rep = torch.matmul(enc_input, attn_weights.unsqueeze(2)).squeeze() # attn-weighted representation r of i-th news
 
         return attn_w_rep

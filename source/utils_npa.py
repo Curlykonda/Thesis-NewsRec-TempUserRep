@@ -260,15 +260,19 @@ def get_labels_from_data(data):
         labels[entry_dict['u_id']] = entry_dict['labels']
     return labels
 
-def get_dpg_data(path_article_data, path_user_data, neg_sample_ratio, max_hist_len, max_len_news_title=30, min_counts_for_vocab=2):
+def get_dpg_data(path_article_data, path_user_data, neg_sample_ratio, max_hist_len, max_len_news_title=30, min_counts_for_vocab=2, load_prepped=True):
 
-    vocab, news_as_word_ids, art_id2idx = preprocess_dpg_news_file(news_file=path_article_data,
+    if load_prepped:
+        with open(config.data_path + "news_prepped.pkl", 'wb') as fin:
+            (vocab, news_as_word_ids, art_id2idx) = pickle.load(fin)
+    else:
+        vocab, news_as_word_ids, art_id2idx = preprocess_dpg_news_file(news_file=path_article_data,
                                                                    tokenizer=word_tokenize,
                                                                    min_counts_for_vocab=min_counts_for_vocab,
                                                                    max_len_news_title=max_len_news_title)
 
-    with open(config.data_path + "news_prepped.pkl", 'wb') as fout:
-        pickle.dump((vocab, news_as_word_ids, art_id2idx), fout)
+        with open(config.data_path + "news_prepped.pkl", 'wb') as fout:
+            pickle.dump((vocab, news_as_word_ids, art_id2idx), fout)
 
     u_id2idx, data = prep_dpg_user_file(path_user_data, set(art_id2idx.keys()), art_id2idx,
                                         npratio=neg_sample_ratio, max_hist_len=max_hist_len)
