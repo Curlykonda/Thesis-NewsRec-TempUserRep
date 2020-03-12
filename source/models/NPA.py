@@ -71,22 +71,24 @@ class NPA_wu(nn.Module):
 
         self.click_predictor = SimpleDot(self.dim_user_rep, self.dim_news_rep)  # click predictor
 
-    def forward(self, brows_hist_as_ids, candidates_as_ids, user_id):
+    def forward(self, user_id, brows_hist_as_ids, candidates_as_ids):
 
-        brows_hist_reps = self.encode_news(brows_hist_as_ids, user_id)
+        brows_hist_reps = self.encode_news(user_id, brows_hist_as_ids)
 
-        candidate_reps = self.encode_news(candidates_as_ids, user_id)
+        candidate_reps = self.encode_news(user_id, candidates_as_ids)
 
-        user_rep = self.create_user_rep(brows_hist_reps, user_id)
+        user_rep = self.create_user_rep(user_id, brows_hist_reps)
 
         click_scores = self.click_predictor(user_rep, candidate_reps)
 
         return click_scores
 
 
-    def encode_news(self, news_articles_as_ids, user_id):
+    def encode_news(self, user_id, news_articles_as_ids):
 
-        emb_news = self.word_embeddings(news_articles_as_ids)
+        # (B x hist_len x art_len) -> (vocab_len x emb_dim_word)
+        # => (B x hist_len x art_len x emb_dim_word)
+        emb_news = self.word_embeddings(news_articles_as_ids) # assert dtype == 'long'
 
         pref_q_word = self.pref_q_word(self.user_id_embeddings(user_id))
 
@@ -94,7 +96,7 @@ class NPA_wu(nn.Module):
 
         return encoded_articles
 
-    def create_user_rep(self, encoded_brows_hist, user_id):
+    def create_user_rep(self, user_id, encoded_brows_hist):
 
         pref_q_article = self.pref_q_article(self.user_id_embeddings(user_id))
 

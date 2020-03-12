@@ -19,12 +19,11 @@ workdir=$PWD/source/
 
 #[ -f /etc/resolv.conf ] && echo "File exists" || echo "File does NOT exist"
 
-
-cd $workdir
+cd $workdir/models
 
 python --version
 
-python -u models/NPA_keras.py
+python -u NPA_keras.py
 
 #cp -r $outdir $workdir
 

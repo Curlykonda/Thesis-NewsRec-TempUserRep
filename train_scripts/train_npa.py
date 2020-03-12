@@ -35,13 +35,13 @@ def train(config):
     data is first processed by functions in 'utils_npa' which follow the structure from original Wu NPA code
     
     '''
-    dataset, labels, vocab, news_as_word_ids, art_id2idx, u_id2idx = get_dpg_data(config.data_path, config.neg_sample_ratio, config.max_hist_len, config.max_news_len)
+    dataset, vocab, news_as_word_ids, art_id2idx, u_id2idx = get_dpg_data(config.data_path, config.neg_sample_ratio, config.max_hist_len, config.max_news_len)
 
     word_embeddings = get_embeddings_from_pretrained(vocab, emb_path=config.word_emb_path)
 
     train_data, test_data = train_test_split(dataset, test_size=0.2, shuffle=True, random_state=config.random_seed)
 
-    train_dataset = DPG_Dataset(train_data, labels, news_as_word_ids)
+    train_dataset = DPG_Dataset(train_data, news_as_word_ids)
     train_generator = DataLoader(train_dataset, config.batch_size)
 
     # build model
@@ -64,7 +64,7 @@ def train(config):
 
         for i_batch, sample in enumerate(train_generator):  # (hist_as_word_ids, cands_as_word_ids, u_id), labels
 
-            brows_hist, candidates, user_ids = sample['input']
+            user_ids, brows_hist, candidates = sample['input']
             lbls = sample['labels']
             lbls.to(device)
 
@@ -73,7 +73,7 @@ def train(config):
                 print(lbls.shape)
 
             # forward pass
-            logits = npa_model(brows_hist.to(device), candidates.to(device), user_ids.to(device))
+            logits = npa_model(user_ids.long().to(device), brows_hist.long().to(device), candidates.long().to(device))
 
             y_probs = torch.nn.functional.softmax(logits, dim=-1)
             y_preds = y_probs.detach().argmax(dim=1)

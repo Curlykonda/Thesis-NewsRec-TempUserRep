@@ -38,7 +38,7 @@ def sample_n_from_elements(elements, ratio):
     else:
         return random.sample(elements, ratio)
 
-def prep_dpg_user_file(user_file, all_article_ids, art_id2idx, npratio=4, max_hist_len=50):
+def prep_dpg_user_file(user_file, article_ids, art_id2idx, neg_sample_ratio=4, max_hist_len=50):
 
     with open(user_file, "rb") as fin:
         user_data = pickle.load(fin)
@@ -61,9 +61,9 @@ def prep_dpg_user_file(user_file, all_article_ids, art_id2idx, npratio=4, max_hi
         for pos_sample in pos_impre:
 
             # generate negative samples
-            candidate_articles = [art_id2idx[art_id] for art_id in sample_n_from_elements(all_article_ids, npratio)]
+            candidate_articles = [art_id2idx[art_id] for art_id in sample_n_from_elements(article_ids, neg_sample_ratio)]
             candidate_articles.append(pos_sample)
-            labels = [0] * npratio + [1] # create temp labels
+            labels = [0] * neg_sample_ratio + [1] # create temp labels
             candidate_articles = list(zip(candidate_articles, labels)) # zip art_id and label
             random.shuffle(candidate_articles) # shuffle article ids with corresponding label
             candidate_articles = np.array(candidate_articles)
@@ -88,13 +88,12 @@ def prep_dpg_user_file(user_file, all_article_ids, art_id2idx, npratio=4, max_hi
     labels_train = np.array(labels_train, dtype='int32')
     user_ids_train = np.array(user_ids_train, dtype='int32')
 
-    columns = ["u_id", "history", "candidates", "labels"]
-    data = [{'u_id': u_id, 'history': hist, 'candidates': cand, 'labels': lbl} for u_id, hist, cand, lbl
+    data = [{'input': (u_id, hist, cands), 'labels': np.array(lbls)} for u_id, hist, cands, lbls
                     in zip(user_ids_train, user_hist_pos_train, candidates_train, labels_train)]
 
     return u_id2idx, data
 
-def preprocess_dpg_news_file(news_file, tokenizer, min_counts_for_vocab=2, max_len_news_title=30, max_vocab_size=30000):
+def preprocess_dpg_news_file(news_file, tokenizer, min_counts_for_vocab=2, max_article_len=30, max_vocab_size=30000):
 
     with open(news_file, 'rb') as f:
         news_data = pickle.load(f)
@@ -124,7 +123,7 @@ def preprocess_dpg_news_file(news_file, tokenizer, min_counts_for_vocab=2, max_l
 
     # 3. encode news as sequence of word_ids
     print("encode news as word_ids ...")
-    news_as_word_ids = [[0] * max_len_news_title]  # encoded news title
+    news_as_word_ids = [[0] * max_article_len]  # encoded news title
     art_id2idx = {'0': 0}  # dictionary news indices
 
     for art_id in news_data:
@@ -140,7 +139,7 @@ def preprocess_dpg_news_file(news_file, tokenizer, min_counts_for_vocab=2, max_l
                 word_ids.append(vocab[word])
 
         # pad & truncate sequence
-        news_as_word_ids.append(pad_sequence(word_ids, max_len_news_title))
+        news_as_word_ids.append(pad_sequence(word_ids, max_article_len))
 
     # reformat as array
     news_as_word_ids = np.array(news_as_word_ids, dtype='int32')
@@ -260,7 +259,7 @@ def get_labels_from_data(data):
         labels[entry_dict['u_id']] = entry_dict['labels']
     return labels
 
-def get_dpg_data(data_path, neg_sample_ratio=4, max_hist_len=50, max_news_len=30, min_counts_for_vocab=2, load_prepped=False):
+def get_dpg_data(data_path, neg_sample_ratio=4, max_hist_len=50, max_article_len=30, min_counts_for_vocab=2, load_prepped=False):
 
     if load_prepped:
         with open(data_path + "news_prepped.pkl", 'rb') as fin:
@@ -270,9 +269,9 @@ def get_dpg_data(data_path, neg_sample_ratio=4, max_hist_len=50, max_news_len=30
         path_article_data = data_path + "news_data.pkl"
 
         vocab, news_as_word_ids, art_id2idx = preprocess_dpg_news_file(news_file=path_article_data,
-                                                                   tokenizer=word_tokenize,
-                                                                   min_counts_for_vocab=min_counts_for_vocab,
-                                                                   max_len_news_title=max_news_len)
+                                                                       tokenizer=word_tokenize,
+                                                                       min_counts_for_vocab=min_counts_for_vocab,
+                                                                       max_article_len=max_article_len)
 
         with open(data_path + "news_prepped.pkl", 'wb') as fout:
             pickle.dump((vocab, news_as_word_ids, art_id2idx), fout)
@@ -280,11 +279,19 @@ def get_dpg_data(data_path, neg_sample_ratio=4, max_hist_len=50, max_news_len=30
     path_user_data = data_path + "user_data.pkl"
 
     u_id2idx, data = prep_dpg_user_file(path_user_data, set(art_id2idx.keys()), art_id2idx,
-                                        npratio=neg_sample_ratio, max_hist_len=max_hist_len)
+                                        neg_sample_ratio=neg_sample_ratio, max_hist_len=max_hist_len)
 
-    return data, get_labels_from_data(data), vocab, news_as_word_ids, art_id2idx, u_id2idx
+    return data, vocab, news_as_word_ids, art_id2idx, u_id2idx
 
 def main(config):
+
+    '''
+    1) refactor: uniform naming of "max_article_len", "max_hist_len", etc.
+    2) Data format of DPG data: u_id, history, candidates, labels
+    3)
+
+
+    '''
 
     if config.data_type not in DATA_TYPES:
         raise KeyError("{} is not a known data format".format(config.data_type))
@@ -304,12 +311,12 @@ def main(config):
         vocab, news_as_word_ids, art_id2idx = preprocess_dpg_news_file(news_file=config.article_data,
                                                                        tokenizer=word_tokenize,
                                                                        min_counts_for_vocab=2,
-                                                                       max_len_news_title=30)
+                                                                       max_article_len=30)
 
         with open(config.data_path + "news_prepped.pkl", 'wb') as fout:
             pickle.dump((vocab, news_as_word_ids, art_id2idx), fout)
 
-        u_id2idx, data = prep_dpg_user_file(config.user_data, set(art_id2idx.keys()), art_id2idx, npratio=config.neg_sample_ratio, max_hist_len=config.max_hist_len)
+        u_id2idx, data = prep_dpg_user_file(config.user_data, set(art_id2idx.keys()), art_id2idx, neg_sample_ratio=config.neg_sample_ratio, max_hist_len=config.max_hist_len)
 
         #idx2u_id = reverse_mapping_dict(u_id2idx)
         #idx2art_id = reverse_mapping_dict(art_id2idx)

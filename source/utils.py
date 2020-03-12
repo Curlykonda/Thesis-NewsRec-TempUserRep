@@ -46,13 +46,16 @@ def pad_sequence(seq, max_len, pad_value=0, pad='post', trunc='last'):
 
     return seq
 
-def get_art_id_from_dpg_history(articles_read):
+def get_art_id_from_dpg_history(articles_read, with_time=False):
 
     # format:
     # entry[0] = news_paper
     # entry[1] = article_id
     # entry[2] = time_stamp
-    return [entry[1] for entry in articles_read]
+    if with_time:
+        return [(art_id, time_stamp) for _, art_id, time_stamp in articles_read]
+    else:
+        return [art_id for _, art_id, _ in articles_read]
 
 def build_vocab_from_word_counts(vocab_raw, max_vocab_size, min_counts_for_vocab):
     vocab = {}
