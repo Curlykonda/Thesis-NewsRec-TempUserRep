@@ -46,24 +46,32 @@ def test_forward_pass():
 
     # build model
     model = test_model_build(data_params, model_params)
+    criterion = nn.BCEWithLogitsLoss()
 
     #
-    batch_size = 2
+    batch_size = 3
     dataset = DPG_Dataset(data_train, labels, news_as_word_ids)
-    data_gen = DataLoader(dataset, batch_size=batch_size)
+    data_gen = DataLoader(dataset, batch_size=batch_size, shuffle=True)
 
-    for x_data, lbls in data_gen: #(hist_as_word_ids, cands_as_word_ids, u_id), labels
-        #preds = model.forward(hist_as_word_ids, cands_as_word_ids, u_id)
-        hist_as_word_ids, cands_as_word_ids, u_id = x_data
+    for i_batch, sample in enumerate(data_gen): #(hist_as_word_ids, cands_as_word_ids, u_id), labels
 
-        print(hist_as_word_ids.shape)
-        print(lbls)
+        hist_as_word_ids, cands_as_word_ids, u_id = sample['input']
+        lbls = sample['labels']
+
+        if i_batch == 0:
+            print(hist_as_word_ids.shape)
+            print(lbls.shape)
 
         logits = model(hist_as_word_ids, cands_as_word_ids, u_id)
 
-        y_preds = torch.nn.functional.softmax(logits, dim=-1)
+        loss1 = criterion(logits, lbls.float()) # or need to apply softmax to logits?
+        loss1.backward()
 
-        print(accuracy_score(lbls, y_preds))
+        y_probs = torch.nn.functional.softmax(logits, dim=-1)
+        #loss2 = criterion(y_probs, lbls.float())
+        y_preds = y_probs.detach().argmax(dim=1)
+
+        print(accuracy_score(lbls.argmax(dim=1), y_preds))
 
 def test_conv1():
     kernel = 3

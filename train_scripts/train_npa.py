@@ -8,6 +8,7 @@ import torch.nn as nn
 from torch.utils.data import DataLoader
 
 from sklearn.model_selection import train_test_split
+from sklearn.metrics import accuracy_score
 
 from source.my_datasets import DPG_Dataset
 from source.models.NPA import NPA_wu
@@ -34,7 +35,7 @@ def train(config):
     data is first processed by functions in 'utils_npa' which follow the structure from original Wu NPA code
     
     '''
-    dataset, labels, vocab, news_as_word_ids, art_id2idx, u_id2idx = get_dpg_data(config.article_data, config.user_data, config.neg_sample_ratio, config.max_hist_len, max_len_news_title=30)
+    dataset, labels, vocab, news_as_word_ids, art_id2idx, u_id2idx = get_dpg_data(config.data_path, config.neg_sample_ratio, config.max_hist_len, config.max_news_len)
 
     word_embeddings = get_embeddings_from_pretrained(vocab, emb_path=config.word_emb_path)
 
@@ -48,23 +49,54 @@ def train(config):
                        emb_dim_user_id=50, emb_dim_pref_query=200, emb_dim_words=300, max_title_len=config.max_hist_len)
     npa_model.to(device)
 
-    criterion = nn.BinaryCrossEntropy()
     #optim
+    criterion = nn.BCEWithLogitsLoss()
+    optim = torch.optim.Adam(npa_model.parameters(), lr=0.001)
+
+    acc = {}
+    losses = {}
 
     for epoch in range(config.n_epochs):
         npa_model.train()
-        for (history, candidates, user_ids), labels in train_generator:
 
-            labels = labels.to(device)
+        acc_ep = []
+        loss_ep = []
 
-            click_scores = npa_model(history.to(device), candidates.to(device), user_ids.to(device))
+        for i_batch, sample in enumerate(train_generator):  # (hist_as_word_ids, cands_as_word_ids, u_id), labels
+
+            brows_hist, candidates, user_ids = sample['input']
+            lbls = sample['labels']
+            lbls.to(device)
+
+            if i_batch == 0:
+                print(brows_hist.shape)
+                print(lbls.shape)
+
+            # forward pass
+            logits = npa_model(brows_hist.to(device), candidates.to(device), user_ids.to(device))
+
+            y_probs = torch.nn.functional.softmax(logits, dim=-1)
+            y_preds = y_probs.detach().argmax(dim=1)
 
             # compute loss
+            loss1 = criterion(logits, lbls.float())  # or need to apply softmax to logits?
+            # loss2 = criterion(y_probs, lbls.float())
 
             # optimiser backward
+            optim.zero_grad()
+            loss1.backward()
+            #torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=config.max_norm)
+            optim.step()
+
+            acc_ep.append(accuracy_score(lbls.argmax(dim=1), y_preds))
+            loss_ep.append(loss1.item())
+
+        print("{} epoch: \t acc {} \t BCE loss {}".format(epoch, np.mean(acc_ep).round(3), np.mean(loss_ep).round(3)))
+        acc[epoch] = acc_ep
+        losses[epoch] = acc_ep
 
 
-if __name__ == "__train__":
+if __name__ == "__main__":
     parser = argparse.ArgumentParser()
 
     #general
@@ -92,6 +124,8 @@ if __name__ == "__train__":
     # preprocessing
     parser.add_argument('--max_hist_len', type=int, default=50,
                         help='maximum length of user reading history, shorter ones are padded; should be in accordance with the input datasets')
+    parser.add_argument('--max_news_len', type=int, default=30,
+                        help='maximum length of news article, shorter ones are padded; should be in accordance with the input datasets')
 
     parser.add_argument('--neg_sample_ratio', type=int, default=4,
                         help='Negative sample ratio N: for each positive impression generate N negative samples')
@@ -99,6 +133,10 @@ if __name__ == "__train__":
     #training
     parser.add_argument('--batch_size', type=int, default=100,
                         help='batch size for training')
+    parser.add_argument('--n_epochs', type=int, default=10,
+                        help='Epoch number for training')
+    parser.add_argument('--lr', type=float, default=0.001,
+                        help='Learning rate')
 
     config = parser.parse_args()
 

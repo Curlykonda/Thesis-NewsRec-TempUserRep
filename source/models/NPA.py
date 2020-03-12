@@ -179,6 +179,8 @@ class PersonalisedAttention(nn.Module):
             nn.Tanh()
         )
 
+        self.attn_weights = None
+
     def forward(self, enc_input, pref_q):
 
         # enc_input.shape = (batch_size, dim_news_rep, title_len)
@@ -188,6 +190,7 @@ class PersonalisedAttention(nn.Module):
         attn_a = torch.bmm(torch.transpose(enc_input, 1, 2), pref_q.unsqueeze(2)).squeeze() # dot product over batch http://pytorch.org/docs/0.2.0/torch.html#torch.bmm
         attn_weights = F.softmax(attn_a, dim=-1)
 
+        self.attn_weights = attn_weights
         #assert torch.sum(attn_weights, dim=1) == torch.ones(attn_weights.shape[0], dtype=float) # (normalised) attn weights should sum to 1
 
         attn_w_rep = torch.matmul(enc_input, attn_weights.unsqueeze(2)).squeeze() # attn-weighted representation r of i-th news

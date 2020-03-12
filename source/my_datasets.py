@@ -1,7 +1,7 @@
 import numpy as np
 
 from torch.distributions import transforms
-from torch.utils.data import Dataset, IterableDataset
+from torch.utils.data import Dataset
 
 class DPG_Dataset(Dataset):
 
@@ -27,10 +27,12 @@ class DPG_Dataset(Dataset):
         cands_as_word_ids = self.news_as_word_ids[candidate_ids]
         #u_id = np.expand_dims(u_id, axis=1)
 
-        return (hist_as_word_ids, cands_as_word_ids, u_id), labels
+        sample = {'input': (hist_as_word_ids, cands_as_word_ids, u_id), 'labels': np.array(labels)}
+
+        return sample
 
     def __len__(self):
-        return len(self.labels)
+        return len(self.data)
 
     @property
     def news_size(self):

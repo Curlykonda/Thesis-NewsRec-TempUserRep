@@ -16,13 +16,14 @@ def generate_test_data(n_items=100, n_users=10, len_vocab=10, max_title_len=5, m
 
     news_as_word_ids = [random.sample(vocab, max_title_len) for _ in item_ids]
     news_as_word_ids = np.array(news_as_word_ids)
+    lbls = [0, 1]
 
     for u_id in u_ids:
 
         hist = random.sample(item_ids, max_hist_len)
 
         cands = random.sample(item_ids, 2)
-        lbls = random.shuffle([0, 1])
+        random.shuffle(lbls)
 
         dataset.append({'u_id': u_id, 'history': hist, 'candidates': cands, 'labels': lbls})
 
