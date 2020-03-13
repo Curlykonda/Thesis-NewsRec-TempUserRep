@@ -15,7 +15,7 @@ sys.path.append("..")
 
 from source.my_datasets import DPG_Dataset
 from source.models.NPA import NPA_wu
-from utils_npa import get_dpg_data, get_embeddings_from_pretrained
+from source.utils_npa import get_dpg_data, get_embeddings_from_pretrained
 
 import source.utils_npa
 import source.utils
