@@ -1,10 +1,10 @@
 #!/bin/bash
-#SBATCH --job-name=train_npa_keras
+#SBATCH --job-name=train_npa_torch
 #SBATCH -n 6
-#SBATCH -t 06:00:00
+#SBATCH -t 01:00:00
 #SBATCH -p gpu_shared
 #SBATCH --gres=gpu:1
-#SBATCH --mem=64G
+#SBATCH --mem=60000M
 
 
 module load pre2019
