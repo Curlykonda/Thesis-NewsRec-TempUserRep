@@ -10,6 +10,9 @@ from torch.utils.data import DataLoader
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score
 
+import sys
+sys.path.append("..")
+
 from source.my_datasets import DPG_Dataset
 from source.models.NPA import NPA_wu
 from utils_npa import get_dpg_data, get_embeddings_from_pretrained
@@ -115,7 +118,6 @@ if __name__ == "__main__":
                         help='path to article data pickle file')
     parser.add_argument('--user_data', type=str, default='../datasets/dpg/i10k_u5k_s30/user_data.pkl',
                         help='path to user data pickle file')
-
     parser.add_argument('--word_emb_path', type=str, default='../embeddings/glove_eng.840B.300d.txt',
                         help='path to directory with word embeddings')
 
