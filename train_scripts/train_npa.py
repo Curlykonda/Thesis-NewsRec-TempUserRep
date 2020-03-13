@@ -1,7 +1,7 @@
-
-
 import numpy as np
 import argparse
+import pickle
+import os
 
 import torch
 import torch.nn as nn
@@ -49,6 +49,9 @@ def train(config):
     train_generator = DataLoader(train_dataset, config.batch_size)
     print("Train on {} samples".format(train_dataset.__len__()))
 
+    test_dataset = DPG_Dataset(test_data, news_as_word_ids)
+    test_generator = DataLoader(test_dataset, config.batch_size)
+
     # build model
     npa_model = NPA_wu(n_users=len(dataset), vocab_len=len(vocab), pretrained_emb=word_embeddings,
                        emb_dim_user_id=50, emb_dim_pref_query=200, emb_dim_words=300, max_title_len=config.max_hist_len)
@@ -58,8 +61,10 @@ def train(config):
     criterion = nn.BCEWithLogitsLoss()
     optim = torch.optim.Adam(npa_model.parameters(), lr=0.001)
 
-    acc = {}
-    losses = {}
+    acc = {'train': [], 'test': []}
+    losses = {'train': [], 'test': []}
+    print_shapes = True
+    DEBUG = False
 
     for epoch in range(config.n_epochs):
         npa_model.train()
@@ -75,8 +80,9 @@ def train(config):
 
             # forward pass
             logits = npa_model(user_ids.long().to(device), brows_hist.long().to(device), candidates.long().to(device))
-            if epoch == 0:
+            if print_shapes:
                 npa_model.get_representation_shapes()
+                print_shapes = False
 
             y_probs = torch.nn.functional.softmax(logits, dim=-1)
             y_preds = y_probs.detach().argmax(dim=1)
@@ -95,10 +101,50 @@ def train(config):
             acc_ep.append(accuracy_score(lbls.argmax(dim=1), y_preds))
             loss_ep.append(loss1.item())
 
-        print("{} epoch: \t acc {} \t BCE loss {}".format(epoch, np.mean(acc_ep).round(3), np.mean(loss_ep).round(3)))
-        acc[epoch] = acc_ep
-        losses[epoch] = acc_ep
+            if DEBUG:
+                break
 
+        acc['train'].append(acc_ep)
+        losses['train'].append(loss_ep)
+
+        #evaluate on test set
+        acc_ep = []
+        loss_ep = []
+
+        npa_model.eval()
+
+        with torch.no_grad():
+            for sample in test_generator:
+                user_ids, brows_hist, candidates = sample['input']
+                lbls = sample['labels']
+
+                # forward pass
+                logits = npa_model(user_ids.long().to(device), brows_hist.long().to(device),
+                                   candidates.long().to(device))
+
+                y_probs = torch.nn.functional.softmax(logits, dim=-1)
+                y_preds = y_probs.detach().argmax(dim=1)
+
+                # compute loss
+                # criterion(input, target)
+                test_loss = criterion(logits, lbls.float())
+
+                acc_ep.append(accuracy_score(lbls.argmax(dim=1), y_preds))
+                loss_ep.append(test_loss.item())
+
+                if DEBUG:
+                    break
+
+        acc['test'].append(acc_ep)
+        losses['test'].append(loss_ep)
+
+        print("{} epoch:".format(epoch))
+        print("TRAIN: acc {} \t BCE loss {}".format(np.mean(acc['train'][-1]).round(3), np.mean(losses['test'][-1]).round(3)))
+        print("TEST: acc {} \t BCE loss {}".format(np.mean(acc['test'][-1]).round(3), np.mean(losses['test'][-1]).round(3)))
+
+    # save results
+    with open(config.results_path + 'exp_name.pkl', 'wb') as fout:
+        pickle.dump((acc, losses), fout)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -122,7 +168,7 @@ if __name__ == "__main__":
     parser.add_argument('--word_emb_path', type=str, default='../embeddings/glove_eng.840B.300d.txt',
                         help='path to directory with word embeddings')
 
-    parser.add_argument('--pkl_path', type=str, default='../datasets/books-pickle/', help='path to save pickle files')
+    parser.add_argument('--results_path', type=str, default='../results/', help='path to save metrics')
 
     # preprocessing
     parser.add_argument('--max_hist_len', type=int, default=50,
