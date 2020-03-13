@@ -53,6 +53,12 @@ class NPA_wu(nn.Module):
         self.dim_emb_user_id = emb_dim_user_id
         self.dim_pref_q = emb_dim_pref_query
 
+        #representations
+        self.user_rep = None
+        self.brows_hist_reps = None
+        self.candidate_reps = None
+        self.click_scores = None
+
         if pretrained_emb is not None:
             #assert pretrained_emb.shape == [vocab_len, emb_dim_words]
             print("Emb shape is {} and should {}".format(pretrained_emb.shape, (vocab_len, emb_dim_words)))
@@ -75,12 +81,17 @@ class NPA_wu(nn.Module):
     def forward(self, user_id, brows_hist_as_ids, candidates_as_ids):
 
         brows_hist_reps = self.encode_news(user_id, brows_hist_as_ids)
+        self.brows_hist_reps = brows_hist_reps
 
         candidate_reps = self.encode_news(user_id, candidates_as_ids)
+        self.candidate_reps = candidate_reps
 
         user_rep = self.create_user_rep(user_id, brows_hist_reps)
 
         click_scores = self.click_predictor(user_rep, candidate_reps)
+        self.click_scores = click_scores
+
+        self.get_representation_shapes()
 
         return click_scores
 
@@ -103,7 +114,21 @@ class NPA_wu(nn.Module):
 
         user_rep = self.user_encoder(encoded_brows_hist, pref_q_article)
 
+        self.user_rep = user_rep
+
         return user_rep
+
+    def get_representation_shapes(self):
+        shapes = {}
+        shapes['user_rep'] = self.user_rep.shape
+        shapes['brow_hist'] = self.brows_hist_reps.shape
+        shapes['cands'] = self.candidate_reps.shape
+        shapes['scores'] = self.click_scores.shape
+
+        for key, shape in shapes.items():
+            print("{} shape {}".format(key, shape))
+
+        return
 
 class PrefQuery_wu(nn.Module):
     '''
