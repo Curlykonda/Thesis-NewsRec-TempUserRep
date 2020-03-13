@@ -38,7 +38,8 @@ def train(config):
     data is first processed by functions in 'utils_npa' which follow the structure from original Wu NPA code
     
     '''
-    dataset, vocab, news_as_word_ids, art_id2idx, u_id2idx = get_dpg_data(config.data_path, config.neg_sample_ratio, config.max_hist_len, config.max_news_len)
+    dataset, vocab, news_as_word_ids, art_id2idx, u_id2idx = get_dpg_data(config.data_path, config.neg_sample_ratio,
+                                                                          config.max_hist_len, config.max_news_len)
 
     word_embeddings = get_embeddings_from_pretrained(vocab, emb_path=config.word_emb_path)
 
@@ -72,16 +73,18 @@ def train(config):
             lbls.to(device)
 
             if i_batch == 0:
-                print(brows_hist.shape)
-                print(lbls.shape)
+                print("Browsing History shape: {} / (batch_size x hist_len x news_len)".format(brows_hist.shape))
+                print("Labels shape: {} (batch_size x n_candidates)".format(lbls.shape))
 
             # forward pass
             logits = npa_model(user_ids.long().to(device), brows_hist.long().to(device), candidates.long().to(device))
+            print(logits.shape)
 
             y_probs = torch.nn.functional.softmax(logits, dim=-1)
             y_preds = y_probs.detach().argmax(dim=1)
 
             # compute loss
+            # criterion(input, target)
             loss1 = criterion(logits, lbls.float())  # or need to apply softmax to logits?
             # loss2 = criterion(y_probs, lbls.float())
 
