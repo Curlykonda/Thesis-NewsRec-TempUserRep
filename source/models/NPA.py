@@ -54,7 +54,8 @@ class NPA_wu(nn.Module):
         self.dim_pref_q = emb_dim_pref_query
 
         if pretrained_emb is not None:
-            assert pretrained_emb.shape == [vocab_len, emb_dim_words]
+            #assert pretrained_emb.shape == [vocab_len, emb_dim_words]
+            print("Emb shape is {} and should {}".format(pretrained_emb.shape, (vocab_len, emb_dim_words)))
             self.word_embeddings = nn.Embedding.from_pretrained(torch.FloatTensor(pretrained_emb), freeze=False, padding_idx=0)      # word embeddings
         else:
             self.word_embeddings = nn.Embedding(vocab_len, emb_dim_words)
