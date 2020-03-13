@@ -15,4 +15,6 @@ class SimpleDot(nn.Module):
 
 
     def forward(self, user_rep, candidate_reps):
-        return torch.matmul(user_rep, candidate_reps)
+        # (B x user_rep_dim) * (B x news_rep_dim x n_candidates)
+        # => (B x n_candidates)
+        return torch.bmm(user_rep.unsqueeze(1), candidate_reps).squeeze()
