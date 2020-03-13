@@ -47,6 +47,7 @@ def train(config):
 
     train_dataset = DPG_Dataset(train_data, news_as_word_ids)
     train_generator = DataLoader(train_dataset, config.batch_size)
+    print("Train on {} samples".format(train_dataset.__len__()))
 
     # build model
     npa_model = NPA_wu(n_users=len(dataset), vocab_len=len(vocab), pretrained_emb=word_embeddings,
@@ -70,14 +71,12 @@ def train(config):
 
             user_ids, brows_hist, candidates = sample['input']
             lbls = sample['labels']
-            lbls.to(device)
-
-            if i_batch == 0:
-                print("Browsing History shape: {} / (batch_size x hist_len x news_len)".format(brows_hist.shape))
-                print("Labels shape: {} (batch_size x n_candidates)".format(lbls.shape))
+            #lbls.to(device)
 
             # forward pass
             logits = npa_model(user_ids.long().to(device), brows_hist.long().to(device), candidates.long().to(device))
+            if epoch == 0:
+                npa_model.get_representation_shapes()
 
             y_probs = torch.nn.functional.softmax(logits, dim=-1)
             y_preds = y_probs.detach().argmax(dim=1)
