@@ -78,7 +78,6 @@ def train(config):
 
             # forward pass
             logits = npa_model(user_ids.long().to(device), brows_hist.long().to(device), candidates.long().to(device))
-            print(logits.shape)
 
             y_probs = torch.nn.functional.softmax(logits, dim=-1)
             y_preds = y_probs.detach().argmax(dim=1)

@@ -9,10 +9,6 @@
 
 module load pre2019
 module load Miniconda3/4.3.27
-#module load cuDNN/7.0.5-CUDA-9.0.176
-#module load NCCL/2.0.5-CUDA-9.0.176
-#module load Python
-
 source activate thesis-user-modelling
 
 workdir=$PWD
@@ -23,6 +19,7 @@ cd $workdir/train_scripts
 
 python --version
 
+#srun -n 2 -t 00:30:00 --pty bash -il
 python -u train_npa.py --word_emb_path="../embeddings/cc.nl.300.bin"
 
 #cp -r $outdir $workdir

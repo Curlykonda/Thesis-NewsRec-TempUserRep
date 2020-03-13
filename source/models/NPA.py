@@ -91,7 +91,7 @@ class NPA_wu(nn.Module):
         click_scores = self.click_predictor(user_rep, candidate_reps)
         self.click_scores = click_scores
 
-        self.get_representation_shapes()
+        #self.get_representation_shapes()
 
         return click_scores
 
