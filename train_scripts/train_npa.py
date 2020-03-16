@@ -58,7 +58,7 @@ def train(config):
     npa_model.to(device)
 
     #optim
-    criterion = nn.BCEWithLogitsLoss()
+    criterion = nn.BCEWithLogitsLoss().to(device)
     optim = torch.optim.Adam(npa_model.parameters(), lr=0.001)
 
     acc = {'train': [], 'test': []}
@@ -76,7 +76,7 @@ def train(config):
 
             user_ids, brows_hist, candidates = sample['input']
             lbls = sample['labels']
-            #lbls.to(device)
+            lbls = lbls.float()
 
             # forward pass
             logits = npa_model(user_ids.long().to(device), brows_hist.long().to(device), candidates.long().to(device))
@@ -89,7 +89,7 @@ def train(config):
 
             # compute loss
             # criterion(input, target)
-            loss1 = criterion(logits, lbls.float())  # or need to apply softmax to logits?
+            loss1 = criterion(logits, lbls)  # or need to apply softmax to logits?
             # loss2 = criterion(y_probs, lbls.float())
 
             # optimiser backward
@@ -113,27 +113,29 @@ def train(config):
 
         npa_model.eval()
 
-        with torch.no_grad():
-            for sample in test_generator:
-                user_ids, brows_hist, candidates = sample['input']
-                lbls = sample['labels']
 
-                # forward pass
+        for sample in test_generator:
+            user_ids, brows_hist, candidates = sample['input']
+            lbls = sample['labels']
+            lbls = lbls.float()
+
+            # forward pass
+            with torch.no_grad():
                 logits = npa_model(user_ids.long().to(device), brows_hist.long().to(device),
                                    candidates.long().to(device))
 
-                y_probs = torch.nn.functional.softmax(logits, dim=-1)
-                y_preds = y_probs.detach().argmax(dim=1)
+            y_probs = torch.nn.functional.softmax(logits, dim=-1)
+            y_preds = y_probs.detach().argmax(dim=1)
 
-                # compute loss
-                # criterion(input, target)
-                test_loss = criterion(logits.to('cpu'), lbls.float())
+            # compute loss
+            # criterion(input, target)
+            test_loss = criterion(logits, lbls)
 
-                acc_ep.append(accuracy_score(lbls.argmax(dim=1), y_preds))
-                loss_ep.append(test_loss.item())
+            acc_ep.append(accuracy_score(lbls.argmax(dim=1), y_preds))
+            loss_ep.append(test_loss.item())
 
-                if DEBUG:
-                    break
+            if DEBUG:
+                break
 
         acc['test'].append(acc_ep)
         losses['test'].append(loss_ep)
