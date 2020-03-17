@@ -139,7 +139,7 @@ def train(config):
                                    candidates.long().to(device))
 
             y_probs = torch.nn.functional.softmax(logits, dim=-1)
-            y_preds = y_probs.detach().argmax(dim=1)
+            y_preds = y_probs.detach().cpu().argmax(dim=1)
 
             # compute loss
             # criterion(input, target)
