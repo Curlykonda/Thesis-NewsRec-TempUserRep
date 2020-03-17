@@ -223,7 +223,7 @@ def gen_batch_data(data, news_as_word_ids, batch_size=100, shuffle=True):
         # aggregate to batch
         batch = (candidates_split + history_split + [user_ids], labels)
 
-        return batch
+        yield batch
 
 def gen_batch_data_test(data, news_as_word_ids, batch_size=100, candidate_pos=0):
     n_batches = range(len(data) // batch_size + 1)
