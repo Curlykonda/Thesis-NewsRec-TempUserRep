@@ -44,7 +44,7 @@ class KimCNN(torch.nn.Module):
     out = torch.cat((out1, out2, out3), 1)
     # Flatten
     out = out.view(out.size(0), -1)
-    # Pass to linear layers
+    # Pass to linear modules
     out = self.fc(out)
 
     return out

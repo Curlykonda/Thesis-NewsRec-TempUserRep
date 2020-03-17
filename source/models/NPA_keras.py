@@ -8,7 +8,6 @@ from keras import backend as K
 from keras.optimizers import *
 from sklearn.model_selection import train_test_split
 import sys
-#sys.path.append('thesis-user-modelling/')
 sys.path.append("..")
 
 from source.metrics import mrr_score, ndcg_score
@@ -24,6 +23,7 @@ MAX_SENTS = 50
 
 BATCH_SIZE = 100
 
+DEBUG = False
 
 
 class HelperConfig(object):
@@ -42,14 +42,19 @@ def get_default_params():
     config.random_seed = 42
 
     #data
-    data_path = '../' + '../datasets/dpg/'
+    if DEBUG:
+        sys_add = '../'
+    else:
+        sys_add = ''
+    data_path = sys_add + '../datasets/dpg/'
+
     config.user_data = data_path + 'i10k_u5k_s30/user_data.pkl'
     config.data_path = data_path + 'i10k_u5k_s30/'
-    config.emb_path = '../../embeddings/cc.nl.300.bin'
+    config.emb_path = sys_add + '../embeddings/cc.nl.300.bin'
 
     #results
-    config.model_save_path = '../../models/'
-    config.model_save_path = '../../results/'
+    config.model_save_path = sys_add + '../saved_models/'
+    config.results_path = sys_add + '../results/'
 
     return config
 
@@ -124,6 +129,7 @@ def build_model(config, n_users, vocab_len, pretrained_emb, emb_dim_user_id=50, 
 
 def train():
 
+
     # 1. set hyper params
     config = get_default_params()
 
@@ -134,7 +140,7 @@ def train():
         (vocab, news_as_word_ids, art_id2idx) = pickle.load(fin)
 
     u_id2idx, data = prep_dpg_user_file(config.user_data, set(art_id2idx.keys()), art_id2idx,
-                                        npratio=config.neg_sample_ratio, max_hist_len=config.max_len_hist)
+                                        neg_sample_ratio=config.neg_sample_ratio, max_hist_len=config.max_len_hist)
 
     train_data, test_data = train_test_split(data, test_size=0.2, shuffle=True, random_state=config.random_seed)
 
@@ -165,8 +171,8 @@ def train():
 
             preds = model.predict(test_inputs)
             auc.append(roc_auc_score(labels, preds, 0))
-            mrr.append(metrics.mrr_score(labels, preds))
-            ndcg5.append(metrics.ndcg_score(labels, preds, k=5))
+            mrr.append(mrr_score(labels, preds))
+            ndcg5.append(ndcg_score(labels, preds, k=5))
 
         print("AUC in ep {}: {}".format(ep, auc[-1]))
         results.append({'auc': auc, 'mrr': mrr, 'ndcg5': ndcg5})
