@@ -91,6 +91,8 @@ def prep_dpg_user_file(user_file, article_ids, art_id2idx, neg_sample_ratio=4, m
     data = [{'input': (u_id, hist, cands), 'labels': np.array(lbls)} for u_id, hist, cands, lbls
                     in zip(user_ids_train, user_hist_pos_train, candidates_train, labels_train)]
 
+    print("Total # data entries: {}".format(len(data)))
+
     return u_id2idx, data
 
 def preprocess_dpg_news_file(news_file, tokenizer, min_counts_for_vocab=2, max_article_len=30, max_vocab_size=30000):
@@ -199,8 +201,8 @@ def gen_batch_data(data, news_as_word_ids, batch_size=100, shuffle=True):
 
     for start, stop in batches:
         # get data for this batch
-        cands, hist, users, labels = zip(*[(news_as_word_ids[data_p['candidates']], news_as_word_ids[data_p['history']],
-                                            data_p['u_id'], data_p['labels'])
+        users, hist, cands, labels = zip(*[(data_p['input'][0], news_as_word_ids[data_p['input'][1]],
+                                            news_as_word_ids[data_p['input'][2]], data_p['labels'])
                                                 for data_p in data[start:stop]]) #return multiple lists from list comprehension
 
         # get candidates
@@ -231,10 +233,9 @@ def gen_batch_data_test(data, news_as_word_ids, batch_size=100, candidate_pos=0)
 
     for start, stop in batches:
         # get data for this batch
-        cands, hist, users, labels = zip(*[(news_as_word_ids[data_p['candidates']], news_as_word_ids[data_p['history']],
-                                            data_p['u_id'], data_p['labels'])
-                                           for data_p in
-                                           data[start:stop]])  # return multiple lists from list comprehension
+        users, hist, cands, labels = zip(*[(data_p['input'][0], news_as_word_ids[data_p['input'][1]],
+                                            news_as_word_ids[data_p['input'][2]], data_p['labels'])
+                                                for data_p in data[start:stop]]) #return multiple lists from list comprehension
 
         # get candidates
         candidates = np.array(cands)  # shape: batch_size X n_candidates X title_len
