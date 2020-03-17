@@ -93,12 +93,13 @@ def train(config):
 
             y_probs = torch.nn.functional.softmax(logits, dim=-1)
             y_preds = y_probs.detach().cpu().argmax(axis=1)
-            #TypeError: can't convert CUDA tensor to numpy. Use Tensor.cpu() to copy the tensor to host memory first.
+
 
             # compute loss
             # criterion(input, target)
-            loss_bce = criterion(logits.cpu(), lbls.cpu())  # or need to apply softmax to logits?
+            loss_bce = criterion(y_probs.cpu(), lbls.cpu())  # or need to apply softmax to logits?
             # loss2 = criterion(y_probs, lbls.float())
+
 
             # optimiser backward
             optim.zero_grad()
