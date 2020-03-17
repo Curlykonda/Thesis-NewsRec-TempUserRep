@@ -162,10 +162,7 @@ def get_embeddings_from_pretrained(vocab, emb_path, emb_dim=300):
         for word, idx in vocab.items():
             embedding_matrix[idx] = ft[word] # how to deal with unknown words?
 
-        embedding_matrix = np.array(embedding_matrix, dtype='float32')
-        print("Shape Embedding matrix: {}".format(embedding_matrix.shape))
-
-        return embedding_matrix
+        return np.array(embedding_matrix, dtype='float32')
 
     except:
         print("Could not load word embeddings")

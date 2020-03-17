@@ -92,7 +92,8 @@ def train(config):
                 print_shapes = False
 
             y_probs = torch.nn.functional.softmax(logits, dim=-1)
-            y_preds = y_probs.detach().argmax(dim=1)
+            y_preds = y_probs.detach().cpu().argmax(axis=1)
+            #TypeError: can't convert CUDA tensor to numpy. Use Tensor.cpu() to copy the tensor to host memory first.
 
             # compute loss
             # criterion(input, target)
