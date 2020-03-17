@@ -6,6 +6,8 @@ import os
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
+from torch.utils.tensorboard import SummaryWriter
+
 
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score
@@ -27,6 +29,8 @@ def train(config):
 
     train_params = { 'batch_size': config.batch_size,
                      'shuffle': True}
+
+    hyper_params = {'lr': None, 'neg_sample_ratio': None} # TODO: aggregate h_params for SummaryWriter
 
     #set random seeds
     torch.manual_seed(config.random_seed)
@@ -61,6 +65,9 @@ def train(config):
     criterion = nn.BCEWithLogitsLoss().to(device)
     optim = torch.optim.Adam(npa_model.parameters(), lr=0.001)
 
+
+    writer = SummaryWriter(config.results_path) # logging
+
     acc = {'train': [], 'test': []}
     losses = {'train': [], 'test': []}
     print_shapes = True
@@ -73,7 +80,7 @@ def train(config):
         loss_ep = []
 
         for i_batch, sample in enumerate(train_generator):  # (hist_as_word_ids, cands_as_word_ids, u_id), labels
-
+            npa_model.zero_grad()
             user_ids, brows_hist, candidates = sample['input']
             lbls = sample['labels']
             lbls = lbls.float()
@@ -89,30 +96,35 @@ def train(config):
 
             # compute loss
             # criterion(input, target)
-            loss1 = criterion(logits, lbls)  # or need to apply softmax to logits?
+            loss_bce = criterion(logits.cpu(), lbls.cpu())  # or need to apply softmax to logits?
             # loss2 = criterion(y_probs, lbls.float())
 
             # optimiser backward
             optim.zero_grad()
-            loss1.backward()
+            loss_bce.backward()
             #torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=config.max_norm)
             optim.step()
 
             acc_ep.append(accuracy_score(lbls.argmax(dim=1), y_preds))
-            loss_ep.append(loss1.item())
+            loss_ep.append(loss_bce.item())
+
 
             if DEBUG:
                 break
 
-        acc['train'].append(acc_ep)
-        losses['train'].append(loss_ep)
+        # logging
+        losses['train'].append(np.mean(loss_ep))
+        acc['train'].append(np.mean(acc_ep))
+        writer.add_scalar('Loss/Train', np.mean(loss_ep), epoch)
+        writer.add_scalar('Acc/Train', np.mean(acc_ep), epoch)
+        writer.add_scalar('Acc-Var/Train', np.var(acc_ep), epoch)
+        writer.add_scalar('Loss-Var/Train', np.var(loss_ep), epoch)
 
         #evaluate on test set
         acc_ep = []
         loss_ep = []
 
         npa_model.eval()
-
 
         for sample in test_generator:
             user_ids, brows_hist, candidates = sample['input']
@@ -137,16 +149,20 @@ def train(config):
             if DEBUG:
                 break
 
-        acc['test'].append(acc_ep)
-        losses['test'].append(loss_ep)
+        # logging
+        losses['test'].append(np.mean(loss_ep))
+        acc['test'].append(np.mean(acc_ep))
+        writer.add_scalar('Loss/Test', np.mean(loss_ep), epoch)
+        writer.add_scalar('Acc/Test', np.mean(acc_ep), epoch)
+        writer.add_scalar('Acc-Var/Test', np.var(acc_ep), epoch)
+        writer.add_scalar('Loss-Var/Test', np.var(loss_ep), epoch)
 
         print("{} epoch:".format(epoch))
-        print("TRAIN: acc {} \t BCE loss {}".format(np.mean(acc['train'][-1]).round(3), np.mean(losses['test'][-1]).round(3)))
-        print("TEST: acc {} \t BCE loss {}".format(np.mean(acc['test'][-1]).round(3), np.mean(losses['test'][-1]).round(3)))
+        print("TRAIN: acc {} \t BCE loss {}".format(np.mean(acc_ep).round(3), np.mean(loss_ep).round(3)))
+        print("TEST: acc {} \t BCE loss {}".format(np.mean(acc_ep).round(3), np.mean(loss_ep).round(3)))
 
-    # save results
-    with open(config.results_path + 'exp_name.pkl', 'wb') as fout:
-        pickle.dump((acc, losses), fout)
+    #writer.add_figure()
+    #write.add_hparams
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
