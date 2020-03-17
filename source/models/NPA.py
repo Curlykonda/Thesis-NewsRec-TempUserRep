@@ -45,6 +45,7 @@ class NPA_wu(nn.Module):
                  emb_dim_words=300, max_title_len=30, n_filters_cnn=400, dropout_p=0.2, device='cpu'):
         super(NPA_wu, self).__init__()
 
+        self.device = device
         self.vocab_len = vocab_len
         self.max_title_len = max_title_len
 
@@ -120,7 +121,7 @@ class NPA_wu(nn.Module):
 
     def get_representation_shapes(self):
         shapes = {}
-        shapes['user_rep'] = self.user_rep.shape
+        shapes['user_rep'] = self.user_rep.shape if self.user_rep != None else None
         shapes['brow_hist'] = self.brows_hist_reps.shape
         shapes['cands'] = self.candidate_reps.shape
         shapes['scores'] = self.click_scores.shape
@@ -135,7 +136,7 @@ class PrefQuery_wu(nn.Module):
     Given an embedded user id, create a preference query vector (that is used in personalised attention)
 
     '''
-    def __init__(self, dim_pref_query=200, dim_emb_u_id=50, activation='relu'):
+    def __init__(self, dim_pref_query=200, dim_emb_u_id=50, activation='relu', device='cpu'):
         super(PrefQuery_wu, self).__init__()
 
         self.dim_pref_query = dim_pref_query
