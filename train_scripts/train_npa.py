@@ -63,8 +63,12 @@ def train(config):
     npa_model.to(device)
 
     #optim
-    crit_bce_logits = nn.BCEWithLogitsLoss()
-    crit_bce = nn.BCELoss()
+    if config.bce_logits:
+        #crit_bce_logits = nn.BCEWithLogitsLoss()
+        criterion = nn.BCEWithLogitsLoss()
+    else:
+        #crit_bce = nn.BCELoss()
+        criterion = nn.BCELoss()
     optim = torch.optim.Adam(npa_model.parameters(), lr=0.001)
 
 
@@ -73,7 +77,7 @@ def train(config):
     acc = {'train': [], 'test': []}
     losses = {'train': [], 'test': []}
     print_shapes = True
-    DEBUG = True
+    DEBUG = False
 
     for epoch in range(config.n_epochs):
         t0 = time.time()
@@ -99,18 +103,19 @@ def train(config):
 
 
             # compute loss
-            # criterion(input, target)
-            loss_bce_logits = crit_bce_logits(logits.cpu(), lbls.cpu())  # or need to apply softmax to logits?
-            loss_bce = crit_bce(y_probs.cpu(), lbls.cpu())
+            if config.bce_logits:
+                loss_bce = criterion(logits.cpu(), lbls.cpu()) #loss_bce_logits = crit_bce_logits(logits.cpu(), lbls.cpu())  # or need to apply softmax to logits?
+            else:
+                loss_bce = criterion(y_probs.cpu(), lbls.cpu()) #loss_bce = crit_bce(y_probs.cpu(), lbls.cpu())
 
             # optimiser backward
             optim.zero_grad()
-            loss_bce_logits.backward()
+            loss_bce.backward()
             #torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=config.max_norm)
             optim.step()
 
             acc_ep.append(accuracy_score(lbls.argmax(dim=1), y_preds))
-            loss_ep.append(loss_bce_logits.item())
+            loss_ep.append(loss_bce.item())
 
 
             if DEBUG:
@@ -145,9 +150,10 @@ def train(config):
             y_preds = y_probs.detach().cpu().argmax(dim=1)
 
             # compute loss
-            # criterion(input, target)
-            test_loss = crit_bce_logits(logits.cpu(), lbls.cpu())  # or need to apply softmax to logits?
-            loss_bce = crit_bce(y_probs.cpu(), lbls.cpu())
+            if config.bce_logits:
+                test_loss = criterion(logits.cpu(), lbls.cpu())
+            else:
+                test_loss = criterion(y_probs.cpu(), lbls.cpu())
 
             acc_ep.append(accuracy_score(lbls.argmax(dim=1), y_preds))
             loss_ep.append(test_loss.item())
@@ -205,12 +211,10 @@ if __name__ == "__main__":
                         help='Negative sample ratio N: for each positive impression generate N negative samples')
 
     #training
-    parser.add_argument('--batch_size', type=int, default=100,
-                        help='batch size for training')
-    parser.add_argument('--n_epochs', type=int, default=10,
-                        help='Epoch number for training')
-    parser.add_argument('--lr', type=float, default=0.001,
-                        help='Learning rate')
+    parser.add_argument('--bce_logits', type=int, default=0, help='use BCE with logits')
+    parser.add_argument('--batch_size', type=int, default=100, help='batch size for training')
+    parser.add_argument('--n_epochs', type=int, default=10, help='Epoch number for training')
+    parser.add_argument('--lr', type=float, default=0.001, help='Learning rate')
 
     config = parser.parse_args()
 
