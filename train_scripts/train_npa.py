@@ -2,6 +2,7 @@ import numpy as np
 import argparse
 import pickle
 import os
+import time
 
 import torch
 import torch.nn as nn
@@ -62,7 +63,8 @@ def train(config):
     npa_model.to(device)
 
     #optim
-    criterion = nn.BCEWithLogitsLoss().to(device)
+    crit_bce_logits = nn.BCEWithLogitsLoss()
+    crit_bce = nn.BCELoss()
     optim = torch.optim.Adam(npa_model.parameters(), lr=0.001)
 
 
@@ -71,9 +73,10 @@ def train(config):
     acc = {'train': [], 'test': []}
     losses = {'train': [], 'test': []}
     print_shapes = True
-    DEBUG = False
+    DEBUG = True
 
     for epoch in range(config.n_epochs):
+        t0 = time.time()
         npa_model.train()
 
         acc_ep = []
@@ -97,24 +100,24 @@ def train(config):
 
             # compute loss
             # criterion(input, target)
-            loss_bce = criterion(y_probs.cpu(), lbls.cpu())  # or need to apply softmax to logits?
-            # loss2 = criterion(y_probs, lbls.float())
-
+            loss_bce_logits = crit_bce_logits(logits.cpu(), lbls.cpu())  # or need to apply softmax to logits?
+            loss_bce = crit_bce(y_probs.cpu(), lbls.cpu())
 
             # optimiser backward
             optim.zero_grad()
-            loss_bce.backward()
+            loss_bce_logits.backward()
             #torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=config.max_norm)
             optim.step()
 
             acc_ep.append(accuracy_score(lbls.argmax(dim=1), y_preds))
-            loss_ep.append(loss_bce.item())
+            loss_ep.append(loss_bce_logits.item())
 
 
             if DEBUG:
                 break
 
         # logging
+        t1 = time.time()
         losses['train'].append(np.mean(loss_ep))
         acc['train'].append(np.mean(acc_ep))
         writer.add_scalar('Loss/Train', np.mean(loss_ep), epoch)
@@ -143,7 +146,8 @@ def train(config):
 
             # compute loss
             # criterion(input, target)
-            test_loss = criterion(logits.cpu(), lbls.cpu())
+            test_loss = crit_bce_logits(logits.cpu(), lbls.cpu())  # or need to apply softmax to logits?
+            loss_bce = crit_bce(y_probs.cpu(), lbls.cpu())
 
             acc_ep.append(accuracy_score(lbls.argmax(dim=1), y_preds))
             loss_ep.append(test_loss.item())
@@ -152,6 +156,7 @@ def train(config):
                 break
 
         # logging
+        t2 = time.time()
         losses['test'].append(np.mean(loss_ep))
         acc['test'].append(np.mean(acc_ep))
         writer.add_scalar('Loss/Test', np.mean(loss_ep), epoch)
@@ -160,8 +165,8 @@ def train(config):
         writer.add_scalar('Loss-Var/Test', np.var(loss_ep), epoch)
 
         print("{} epoch:".format(epoch))
-        print("TRAIN: acc {} \t BCE loss {}".format(np.mean(acc_ep).round(3), np.mean(loss_ep).round(3)))
-        print("TEST: acc {} \t BCE loss {}".format(np.mean(acc_ep).round(3), np.mean(loss_ep).round(3)))
+        print("TRAIN: acc {:0.3f} \t BCE loss {:1.3f} in {:0.1f}s".format(np.mean(acc_ep), np.mean(loss_ep), (t1-t0)))
+        print("TEST: acc {:0.3f} \t BCE loss {:1.3f} in {:0.1f}s".format(np.mean(acc_ep), np.mean(loss_ep), (t2-t1)))
 
     #writer.add_figure()
     #write.add_hparams
