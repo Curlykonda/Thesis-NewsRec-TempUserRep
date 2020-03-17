@@ -143,7 +143,7 @@ def train(config):
 
             # compute loss
             # criterion(input, target)
-            test_loss = criterion(logits, lbls)
+            test_loss = criterion(logits.cpu(), lbls.cpu())
 
             acc_ep.append(accuracy_score(lbls.argmax(dim=1), y_preds))
             loss_ep.append(test_loss.item())
