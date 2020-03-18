@@ -123,7 +123,7 @@ def train(config):
             # add metrics
             metrics_epoch.append((loss_bce.item(),
                                   accuracy_score(lbls.argmax(dim=1), y_preds),
-                                  roc_auc_score(lbls, y_probs.detach().numpy())))
+                                  roc_auc_score(lbls, y_probs.detach().cpu().numpy())))
 
             if DEBUG:
                 break
@@ -158,7 +158,7 @@ def train(config):
 
             metrics_epoch.append((test_loss.item(),
                                   accuracy_score(lbls.argmax(dim=1), y_preds),
-                                  roc_auc_score(lbls, y_probs.detach().numpy())))
+                                  roc_auc_score(lbls, y_probs.detach().cpu().numpy())))
 
             if DEBUG:
                 break
