@@ -26,6 +26,30 @@ from source.utils_npa import get_dpg_data, get_embeddings_from_pretrained
 import source.utils_npa
 import source.utils
 
+def try_var_loss_funcs(logits, targets, i_batch):
+    batch_size = logits.shape[0]
+
+    softmax = nn.Softmax(dim=1)
+    sigmoid = nn.Sigmoid()
+    log_softm = nn.LogSoftmax(dim=1)
+
+    bce = nn.BCELoss()
+    bce_w_log = nn.BCEWithLogitsLoss()
+    ce = nn.CrossEntropyLoss()
+    nll = nn.NLLLoss()
+    acc = (logits.argmax(dim=1) == targets.argmax(dim=1)).sum().float().mean()
+
+    softm_probs = softmax(logits)
+    sigm_probs = sigmoid(logits)
+    log_softm_probs = log_softm(logits)
+
+    print("\n Batch {}".format(i_batch))
+    print("TP acc {0:.3f}".format(acc))
+    print("BCE softm {0:.3f} \t sigmoid {0:.3f}".format(bce(softm_probs, targets), bce(sigm_probs, targets)))
+    print("BCE w Logits {0:.3f} \t softm {0:.3f}".format(bce_w_log(logits, targets), bce_w_log(softm_probs, targets)))
+    print("CE softm {0:.3f} \t sigmoid {0:.3f}".format(ce(softm_probs, targets.argmax(dim=1)), ce(log_softm_probs, targets.argmax(dim=1))))
+    print("NLL softm {0:.3f} \t log softm {0:.3f}".format(nll(softm_probs, targets.argmax(dim=1)), nll(log_softm_probs, targets.argmax(dim=1))))
+
 def train(config):
 
     # set device
@@ -60,14 +84,15 @@ def train(config):
                        emb_dim_user_id=50, emb_dim_pref_query=200, emb_dim_words=300, max_title_len=config.max_hist_len)
     npa_model.to(device)
     #
-    #optim
+    #optim & loss
     if config.bce_logits:
         #crit_bce_logits = nn.BCEWithLogitsLoss()
-        criterion = nn.BCEWithLogitsLoss()
+        criterion = nn.BCEWithLogitsLoss() # raw_score -> nn.Sigmoid() -> BCE loss
         print("using BCE with Logits")
     else:
         #crit_bce = nn.BCELoss()
-        criterion = nn.BCELoss()
+        criterion = nn.BCELoss() # raw_scores (logits) -> Softmax -> BCE loss
+        # logits are un-normalized scores
     optim = torch.optim.Adam(npa_model.parameters(), lr=0.001)
 
 
@@ -80,8 +105,6 @@ def train(config):
     exp_name = now.strftime("%H:%M") + '-metrics.pkl'
     writer = SummaryWriter(res_path) # logging
 
-    acc = {'train': [], 'test': []}
-    losses = {'train': [], 'test': []}
     metrics = defaultdict(list)
     print_shapes = False
     DEBUG = False
@@ -112,7 +135,10 @@ def train(config):
             if config.bce_logits:
                 loss_bce = criterion(logits.cpu(), lbls.cpu()) #loss_bce_logits = crit_bce_logits(logits.cpu(), lbls.cpu())  # or need to apply softmax to logits?
             else:
-                loss_bce = criterion(y_probs.cpu(), lbls.cpu()) #loss_bce = crit_bce(y_probs.cpu(), lbls.cpu())
+                loss_bce = criterion(y_probs.cpu(), lbls.cpu()) # use softmax probabilities
+
+            try_var_loss_funcs(logits, lbls, i_batch)
+
 
             # optimiser backward
             optim.zero_grad()
@@ -121,6 +147,8 @@ def train(config):
             optim.step()
 
             # add metrics
+            #accuracy = (predictions.argmax(dim=1) == batch_targets).sum().float() / (config.batch_size)
+
             metrics_epoch.append((loss_bce.item(),
                                   accuracy_score(lbls.argmax(dim=1), y_preds),
                                   roc_auc_score(lbls, y_probs.detach().cpu().numpy())))
