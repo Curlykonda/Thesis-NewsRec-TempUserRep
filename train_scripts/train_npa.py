@@ -2,7 +2,10 @@ import numpy as np
 import argparse
 import pickle
 import os
+from pathlib import Path
 import time
+from datetime import datetime
+from collections import defaultdict
 
 import torch
 import torch.nn as nn
@@ -11,7 +14,7 @@ from torch.utils.tensorboard import SummaryWriter
 
 
 from sklearn.model_selection import train_test_split
-from sklearn.metrics import accuracy_score
+from sklearn.metrics import accuracy_score, roc_auc_score, roc_curve
 
 import sys
 sys.path.append("..")
@@ -39,52 +42,56 @@ def train(config):
     np.random.seed(config.random_seed)
 
     # data is indexed by user_ids
-    '''
-    data is first processed by functions in 'utils_npa' which follow the structure from original Wu NPA code
-    
-    '''
     dataset, vocab, news_as_word_ids, art_id2idx, u_id2idx = get_dpg_data(config.data_path, config.neg_sample_ratio,
                                                                           config.max_hist_len, config.max_news_len)
-
     word_embeddings = get_embeddings_from_pretrained(vocab, emb_path=config.word_emb_path)
 
     train_data, test_data = train_test_split(dataset, test_size=0.2, shuffle=True, random_state=config.random_seed)
 
     train_dataset = DPG_Dataset(train_data, news_as_word_ids)
     train_generator = DataLoader(train_dataset, config.batch_size)
-    print("Train on {} samples".format(train_dataset.__len__()))
 
     test_dataset = DPG_Dataset(test_data, news_as_word_ids)
     test_generator = DataLoader(test_dataset, config.batch_size)
-
+    print("Train on {} samples".format(train_dataset.__len__()))
+    #
     # build model
     npa_model = NPA_wu(n_users=len(dataset), vocab_len=len(vocab), pretrained_emb=word_embeddings,
                        emb_dim_user_id=50, emb_dim_pref_query=200, emb_dim_words=300, max_title_len=config.max_hist_len)
     npa_model.to(device)
-
+    #
     #optim
     if config.bce_logits:
         #crit_bce_logits = nn.BCEWithLogitsLoss()
         criterion = nn.BCEWithLogitsLoss()
+        print("using BCE with Logits")
     else:
         #crit_bce = nn.BCELoss()
         criterion = nn.BCELoss()
     optim = torch.optim.Adam(npa_model.parameters(), lr=0.001)
 
 
-    writer = SummaryWriter(config.results_path) # logging
+    now = datetime.now()
+    date = now.strftime("%m-%d-%y")
+    res_path = Path(config.results_path)
+    res_path = res_path / date
+    res_path.mkdir(parents=True, exist_ok=True)
+
+    exp_name = now.strftime("%H:%M") + '-metrics.pkl'
+    writer = SummaryWriter(res_path) # logging
 
     acc = {'train': [], 'test': []}
     losses = {'train': [], 'test': []}
-    print_shapes = True
+    metrics = defaultdict(list)
+    print_shapes = False
     DEBUG = False
 
+    t_train_start = time.time()
     for epoch in range(config.n_epochs):
         t0 = time.time()
         npa_model.train()
 
-        acc_ep = []
-        loss_ep = []
+        metrics_epoch = []
 
         for i_batch, sample in enumerate(train_generator):  # (hist_as_word_ids, cands_as_word_ids, u_id), labels
             npa_model.zero_grad()
@@ -98,9 +105,8 @@ def train(config):
                 npa_model.get_representation_shapes()
                 print_shapes = False
 
-            y_probs = torch.nn.functional.softmax(logits, dim=-1)
+            y_probs = torch.nn.functional.softmax(logits, dim=1)
             y_preds = y_probs.detach().cpu().argmax(axis=1)
-
 
             # compute loss
             if config.bce_logits:
@@ -114,26 +120,21 @@ def train(config):
             #torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=config.max_norm)
             optim.step()
 
-            acc_ep.append(accuracy_score(lbls.argmax(dim=1), y_preds))
-            loss_ep.append(loss_bce.item())
-
+            # add metrics
+            metrics_epoch.append((loss_bce.item(),
+                                  accuracy_score(lbls.argmax(dim=1), y_preds),
+                                  roc_auc_score(lbls, y_probs.detach().numpy())))
 
             if DEBUG:
                 break
 
-        # logging
+        # metrics = logging(metrics_epoch, metrics, writer, mode='train')
+        #loss, acc, auc = zip(*metrics)
         t1 = time.time()
-        losses['train'].append(np.mean(loss_ep))
-        acc['train'].append(np.mean(acc_ep))
-        writer.add_scalar('Loss/Train', np.mean(loss_ep), epoch)
-        writer.add_scalar('Acc/Train', np.mean(acc_ep), epoch)
-        writer.add_scalar('Acc-Var/Train', np.var(acc_ep), epoch)
-        writer.add_scalar('Loss-Var/Train', np.var(loss_ep), epoch)
+        metrics = log_metrics(epoch, metrics_epoch, metrics, writer)
 
         #evaluate on test set
-        acc_ep = []
-        loss_ep = []
-
+        metrics_epoch = []
         npa_model.eval()
 
         for sample in test_generator:
@@ -155,27 +156,48 @@ def train(config):
             else:
                 test_loss = criterion(y_probs.cpu(), lbls.cpu())
 
-            acc_ep.append(accuracy_score(lbls.argmax(dim=1), y_preds))
-            loss_ep.append(test_loss.item())
+            metrics_epoch.append((test_loss.item(),
+                                  accuracy_score(lbls.argmax(dim=1), y_preds),
+                                  roc_auc_score(lbls, y_probs.detach().numpy())))
 
             if DEBUG:
                 break
 
         # logging
         t2 = time.time()
-        losses['test'].append(np.mean(loss_ep))
-        acc['test'].append(np.mean(acc_ep))
-        writer.add_scalar('Loss/Test', np.mean(loss_ep), epoch)
-        writer.add_scalar('Acc/Test', np.mean(acc_ep), epoch)
-        writer.add_scalar('Acc-Var/Test', np.var(acc_ep), epoch)
-        writer.add_scalar('Loss-Var/Test', np.var(loss_ep), epoch)
+        metrics = log_metrics(epoch, metrics_epoch, metrics, writer, mode='test')
 
-        print("{} epoch:".format(epoch))
-        print("TRAIN: acc {:0.3f} \t BCE loss {:1.3f} in {:0.1f}s".format(np.mean(acc_ep), np.mean(loss_ep), (t1-t0)))
-        print("TEST: acc {:0.3f} \t BCE loss {:1.3f} in {:0.1f}s".format(np.mean(acc_ep), np.mean(loss_ep), (t2-t1)))
+        print("\n {} epoch".format(epoch))
+        print("TRAIN: BCE loss {:1.3f} \t acc {:0.3f} in {:0.1f}s".format(metrics['loss/train'][-1], metrics['acc/train'][-1], (t1-t0)))
+        print("TEST: BCE loss {:1.3f}  \t acc {:0.3f} in {:0.1f}s".format(metrics['loss/test'][-1], metrics['acc/test'][-1], (t2-t1)))
 
+        if DEBUG:
+            break
+
+    print("\n---------- Done in {0:.2f} min ----------".format((time.time()-t_train_start)/60))
     #writer.add_figure()
     #write.add_hparams
+
+    #save metrics
+    with open(res_path / exp_name, 'wb') as fout:
+        pickle.dump(metrics, fout)
+
+
+def log_metrics(epoch, metrics_epoch, metrics, writer, mode='train'):
+    loss, acc, auc = (zip(*metrics_epoch))
+
+    metrics['loss/' + mode].append(np.mean(loss))
+    metrics['acc/' + mode].append(np.mean(acc))
+    metrics['auc/' + mode].append(np.mean(auc))
+    writer.add_scalar('loss/' + mode, np.mean(loss), epoch)
+    writer.add_scalar('acc/' + mode, np.mean(acc), epoch)
+    writer.add_scalar('auc/' + mode, np.mean(auc), epoch)
+    writer.add_scalar('loss-var/' + mode, np.var(loss), epoch)
+    writer.add_scalar('acc-var/' + mode, np.var(acc), epoch)
+    writer.add_scalar('auc-var/' + mode, np.var(auc), epoch)
+
+    return metrics
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -199,7 +221,7 @@ if __name__ == "__main__":
     parser.add_argument('--word_emb_path', type=str, default='../embeddings/glove_eng.840B.300d.txt',
                         help='path to directory with word embeddings')
 
-    parser.add_argument('--results_path', type=str, default='../results/', help='path to save metrics')
+    parser.add_argument('--results_path', type=str, default='../results/exp1/', help='path to save metrics')
 
     # preprocessing
     parser.add_argument('--max_hist_len', type=int, default=50,
