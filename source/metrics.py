@@ -20,3 +20,6 @@ def mrr_score(y_true, y_score):
     y_true = np.take(y_true, order)
     rr_score = y_true / (np.arange(len(y_true)) + 1)
     return np.sum(rr_score) / np.sum(y_true)
+
+def compute_acc_tensors(preds, targets):
+    return (preds.argmax(dim=1) == targets.argmax(dim=1)).sum().float() / targets.shape[0]

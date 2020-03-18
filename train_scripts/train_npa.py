@@ -14,7 +14,8 @@ from torch.utils.tensorboard import SummaryWriter
 
 
 from sklearn.model_selection import train_test_split
-from sklearn.metrics import accuracy_score, roc_auc_score, roc_curve
+from sklearn.metrics import roc_auc_score, roc_curve
+from source.metrics import *
 
 import sys
 sys.path.append("..")
@@ -36,7 +37,7 @@ def try_var_loss_funcs(logits, targets, i_batch):
     bce_w_log = nn.BCEWithLogitsLoss()
     ce = nn.CrossEntropyLoss()
     nll = nn.NLLLoss()
-    acc = (logits.argmax(dim=1) == targets.argmax(dim=1)).sum().float().mean()
+    acc = compute_acc_tensors(logits, targets)
 
     softm_probs = softmax(logits)
     sigm_probs = sigmoid(logits)
@@ -48,6 +49,7 @@ def try_var_loss_funcs(logits, targets, i_batch):
     print("BCE w Logits {0:.3f} \t softm {0:.3f}".format(bce_w_log(logits, targets), bce_w_log(softm_probs, targets)))
     print("CE softm {0:.3f} \t sigmoid {0:.3f}".format(ce(softm_probs, targets.argmax(dim=1)), ce(log_softm_probs, targets.argmax(dim=1))))
     print("NLL softm {0:.3f} \t log softm {0:.3f}".format(nll(softm_probs, targets.argmax(dim=1)), nll(log_softm_probs, targets.argmax(dim=1))))
+
 
 def train(config):
 
@@ -132,9 +134,9 @@ def train(config):
 
             # compute loss
             if config.bce_logits:
-                loss_bce = criterion(logits.cpu(), lbls.cpu()) #loss_bce_logits = crit_bce_logits(logits.cpu(), lbls.cpu())  # or need to apply softmax to logits?
+                loss_bce = criterion(logits, lbls) #loss_bce_logits, i.e. raw click scores
             else:
-                loss_bce = criterion(y_probs.cpu(), lbls.cpu()) # use softmax probabilities
+                loss_bce = criterion(y_probs, lbls) # use softmax probabilities
 
             try_var_loss_funcs(logits, lbls, i_batch)
 
@@ -149,8 +151,8 @@ def train(config):
             #accuracy = (predictions.argmax(dim=1) == batch_targets).sum().float() / (config.batch_size)
 
             metrics_epoch.append((loss_bce.item(),
-                                  accuracy_score(lbls.argmax(dim=1), y_preds),
-                                  roc_auc_score(lbls, y_probs.detach().cpu().numpy())))
+                                  compute_acc_tensors(y_probs, lbls),
+                                  roc_auc_score(lbls.cpu(), y_probs.detach().cpu().numpy())))
 
             if DEBUG:
                 break
@@ -184,8 +186,8 @@ def train(config):
                 test_loss = criterion(y_probs.cpu(), lbls.cpu())
 
             metrics_epoch.append((test_loss.item(),
-                                  accuracy_score(lbls.argmax(dim=1), y_preds),
-                                  roc_auc_score(lbls, y_probs.detach().cpu().numpy())))
+                                  compute_acc_tensors(y_probs, lbls),
+                                  roc_auc_score(lbls.cpu(), y_probs.detach().cpu().numpy())))
 
             if DEBUG:
                 break
