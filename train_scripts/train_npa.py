@@ -15,7 +15,6 @@ from torch.utils.tensorboard import SummaryWriter
 
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import roc_auc_score, roc_curve
-from source.metrics import *
 
 import sys
 sys.path.append("..")
@@ -23,9 +22,7 @@ sys.path.append("..")
 from source.my_datasets import DPG_Dataset
 from source.models.NPA import NPA_wu
 from source.utils_npa import get_dpg_data, get_embeddings_from_pretrained
-
-import source.utils_npa
-import source.utils
+from source.metrics import *
 
 def try_var_loss_funcs(logits, targets, i_batch):
 
