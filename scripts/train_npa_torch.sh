@@ -20,8 +20,8 @@ cd $workdir/train_scripts
 python --version
 
 #srun -n 2 -t 00:30:00 --pty bash -il
-python -u train_npa.py --word_emb_path="../embeddings/cc.nl.300.bin"
-python -u train_npa.py --word_emb_path="../embeddings/cc.nl.300.bin" --bce_logits=1
+python -u train_npa.py --word_emb_path="../embeddings/cc.nl.300.bin" --n_epochs=20
+python -u train_npa.py --word_emb_path="../embeddings/cc.nl.300.bin" --bce_logits=1 --n_epochs=20
 
 #cp -r $outdir $workdir
 

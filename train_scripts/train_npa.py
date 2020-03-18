@@ -27,7 +27,6 @@ import source.utils_npa
 import source.utils
 
 def try_var_loss_funcs(logits, targets, i_batch):
-    batch_size = logits.shape[0]
 
     softmax = nn.Softmax(dim=1)
     sigmoid = nn.Sigmoid()
@@ -120,7 +119,7 @@ def train(config):
             npa_model.zero_grad()
             user_ids, brows_hist, candidates = sample['input']
             lbls = sample['labels']
-            lbls = lbls.float()
+            lbls = lbls.float().to(device)
 
             # forward pass
             logits = npa_model(user_ids.long().to(device), brows_hist.long().to(device), candidates.long().to(device))
