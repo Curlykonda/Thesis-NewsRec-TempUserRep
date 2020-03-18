@@ -47,7 +47,6 @@ def try_var_loss_funcs(logits, targets, i_batch):
     print("CE softm {0:.3f} \t sigmoid {0:.3f}".format(ce(softm_probs, targets.argmax(dim=1)), ce(log_softm_probs, targets.argmax(dim=1))))
     print("NLL softm {0:.3f} \t log softm {0:.3f}".format(nll(softm_probs, targets.argmax(dim=1)), nll(log_softm_probs, targets.argmax(dim=1))))
 
-
 def train(config):
 
     # set device
@@ -166,7 +165,7 @@ def train(config):
         for sample in test_generator:
             user_ids, brows_hist, candidates = sample['input']
             lbls = sample['labels']
-            lbls = lbls.float()
+            lbls = lbls.float().to(device)
 
             # forward pass
             with torch.no_grad():
@@ -178,9 +177,9 @@ def train(config):
 
             # compute loss
             if config.bce_logits:
-                test_loss = criterion(logits.cpu(), lbls.cpu())
+                test_loss = criterion(logits, lbls)
             else:
-                test_loss = criterion(y_probs.cpu(), lbls.cpu())
+                test_loss = criterion(y_probs, lbls)
 
             metrics_epoch.append((test_loss.item(),
                                   compute_acc_tensors(y_probs, lbls),

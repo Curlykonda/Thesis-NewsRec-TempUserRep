@@ -1,6 +1,6 @@
 #!/bin/bash
 #SBATCH --job-name=train_npa_torch
-#SBATCH -n 6
+#SBATCH -n 2
 #SBATCH -t 01:00:00
 #SBATCH -p gpu_shared
 #SBATCH --gres=gpu:1
@@ -20,8 +20,8 @@ cd $workdir/train_scripts
 python --version
 
 #srun -n 2 -t 00:30:00 --pty bash -il
-python -u train_npa.py --word_emb_path="../embeddings/cc.nl.300.bin" --n_epochs=20
-python -u train_npa.py --word_emb_path="../embeddings/cc.nl.300.bin" --bce_logits=1 --n_epochs=20
+python -u train_npa.py --word_emb_path="../embeddings/cc.nl.300.bin"
+python -u train_npa.py --word_emb_path="../embeddings/cc.nl.300.bin" --bce_logits=1
 
 #cp -r $outdir $workdir
 
