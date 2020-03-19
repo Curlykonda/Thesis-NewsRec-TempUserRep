@@ -210,7 +210,7 @@ def train(config):
         print("\nLogits {}".format(map_round_tensor(logits)))
         print("Softm p {}".format(map_round_tensor(y_probs_softmax)))
         print("Sigm p {}".format(map_round_tensor(y_probs_sigmoid)))
-        print("Targets {}".format(lbls[0].numpy().tolist()))
+        print("Targets {}".format(lbls[0].cpu().numpy().tolist()))
 
         if device.type == 'cpu':
             break
