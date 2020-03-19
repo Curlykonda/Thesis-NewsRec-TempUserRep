@@ -14,7 +14,7 @@ from torch.utils.tensorboard import SummaryWriter
 
 
 from sklearn.model_selection import train_test_split
-from sklearn.metrics import roc_auc_score, roc_curve
+from sklearn.metrics import roc_auc_score, average_precision_score
 
 import sys
 sys.path.append("..")
@@ -102,9 +102,10 @@ def train(config):
     exp_name = now.strftime("%H:%M") + '-metrics.pkl'
     writer = SummaryWriter(res_path) # logging
 
-    metrics = defaultdict(list)
+    metrics_train = defaultdict(list)
+    metrics_test = defaultdict(list)
     print_shapes = False
-    DEBUG = False
+    DEBUG = True
 
     t_train_start = time.time()
     for epoch in range(config.n_epochs):
@@ -125,17 +126,19 @@ def train(config):
                 npa_model.get_representation_shapes()
                 print_shapes = False
 
-            y_probs = torch.nn.functional.softmax(logits, dim=1)
-            y_preds = y_probs.detach().cpu().argmax(axis=1)
+            y_probs_softmax = torch.nn.functional.softmax(logits, dim=-1)
+            y_probs_sigmoid = torch.sigmoid(logits)
+            y_preds = y_probs_softmax.argmax(dim=1)
 
             # compute loss
             if config.bce_logits:
                 loss_bce = criterion(logits, lbls) #loss_bce_logits, i.e. raw click scores
+                y_probs_cpu = y_probs_sigmoid.detach().cpu()
             else:
-                loss_bce = criterion(y_probs, lbls) # use softmax probabilities
+                loss_bce = criterion(y_probs_softmax, lbls) # bce with softmax probabilities
+                y_probs_cpu = y_probs_softmax.detach().cpu()
 
-            try_var_loss_funcs(logits, lbls, i_batch)
-
+            #try_var_loss_funcs(logits, lbls, i_batch)
 
             # optimiser backward
             optim.zero_grad()
@@ -144,59 +147,72 @@ def train(config):
             optim.step()
 
             # add metrics
-            #accuracy = (predictions.argmax(dim=1) == batch_targets).sum().float() / (config.batch_size)
+            lbl_cpu = lbls.cpu()
 
             metrics_epoch.append((loss_bce.item(),
-                                  compute_acc_tensors(y_probs, lbls),
-                                  roc_auc_score(lbls.cpu(), y_probs.detach().cpu().numpy())))
+                                  compute_acc_tensors(y_probs_softmax, lbls),
+                                  roc_auc_score(lbl_cpu, y_probs_cpu), # TPR v. FPR with varying threshold
+                                  average_precision_score(lbl_cpu, y_probs_cpu))) # \text{AP} = \sum_n (R_n - R_{n-1}) P_n
 
-            if DEBUG:
+            if device.type == 'cpu':
                 break
 
-        # metrics = logging(metrics_epoch, metrics, writer, mode='train')
         #loss, acc, auc = zip(*metrics)
         t1 = time.time()
-        metrics = log_metrics(epoch, metrics_epoch, metrics, writer)
+        metrics_train = log_metrics(epoch, metrics_epoch, metrics_train, writer)
 
         #evaluate on test set
         metrics_epoch = []
         npa_model.eval()
 
-        for sample in test_generator:
-            user_ids, brows_hist, candidates = sample['input']
-            lbls = sample['labels']
-            lbls = lbls.float().to(device)
+        with torch.no_grad():
+            for sample in test_generator:
+                user_ids, brows_hist, candidates = sample['input']
+                lbls = sample['labels']
+                lbls = lbls.float().to(device)
 
-            # forward pass
-            with torch.no_grad():
+                # forward pass
                 logits = npa_model(user_ids.long().to(device), brows_hist.long().to(device),
                                    candidates.long().to(device))
 
-            y_probs = torch.nn.functional.softmax(logits, dim=-1)
-            y_preds = y_probs.detach().cpu().argmax(dim=1)
+                y_probs_softmax = torch.nn.functional.softmax(logits, dim=-1)
+                y_probs_sigmoid = torch.sigmoid(logits)
+                y_preds = y_probs_softmax.argmax(dim=1)
 
-            # compute loss
-            if config.bce_logits:
-                test_loss = criterion(logits, lbls)
-            else:
-                test_loss = criterion(y_probs, lbls)
+                # compute loss
+                if config.bce_logits:
+                    test_loss = criterion(logits, lbls)  # loss_bce_logits, i.e. raw click scores
+                    y_probs_cpu = y_probs_sigmoid.detach().cpu()
+                else:
+                    test_loss = criterion(y_probs_softmax, lbls)  # bce with softmax probabilities
+                    y_probs_cpu = y_probs_softmax.detach().cpu()
 
-            metrics_epoch.append((test_loss.item(),
-                                  compute_acc_tensors(y_probs, lbls),
-                                  roc_auc_score(lbls.cpu(), y_probs.detach().cpu().numpy())))
+                metrics_epoch.append((test_loss.item(),
+                                      compute_acc_tensors(y_probs_cpu, lbls),
+                                      roc_auc_score(lbls.cpu(), y_probs_cpu),
+                                      average_precision_score(lbls.cpu(), y_probs_cpu)))
 
-            if DEBUG:
-                break
+                #precision, recall, thresholds = precision_recall_curve(y_true, y_scores)
+
+                if device.type == 'cpu':
+                    break
 
         # logging
         t2 = time.time()
-        metrics = log_metrics(epoch, metrics_epoch, metrics, writer, mode='test')
+        metrics_test = log_metrics(epoch, metrics_epoch, metrics_test, writer, mode='test')
 
         print("\n {} epoch".format(epoch))
-        print("TRAIN: BCE loss {:1.3f} \t acc {:0.3f} in {:0.1f}s".format(metrics['loss/train'][-1], metrics['acc/train'][-1], (t1-t0)))
-        print("TEST: BCE loss {:1.3f}  \t acc {:0.3f} in {:0.1f}s".format(metrics['loss/test'][-1], metrics['acc/test'][-1], (t2-t1)))
+        print("TRAIN: BCE loss {:1.3f} \t acc {:0.3f} \t auc {:0.3f} \t ap {:0.3f} in {:0.1f}s".format(
+                metrics_train['loss'][-1], metrics_train['acc'][-1], metrics_train['auc'][-1], metrics_train['ap'][-1], (t1-t0)))
+        print("TEST: BCE loss {:1.3f}  \t acc {:0.3f} \t auc {:0.3f} \t ap {:0.3f} in {:0.1f}s".format(
+                metrics_test['loss'][-1], metrics_test['acc'][-1], metrics_test['auc'][-1], metrics_test['ap'][-1], (t2-t1)))
 
-        if DEBUG:
+        print("\nLogits {}".format(map_round_tensor(logits)))
+        print("Softm p {}".format(map_round_tensor(y_probs_softmax)))
+        print("Sigm p {}".format(map_round_tensor(y_probs_sigmoid)))
+        print("Targets {}".format(lbls[0].numpy().tolist()))
+
+        if device.type == 'cpu':
             break
 
     print("\n---------- Done in {0:.2f} min ----------".format((time.time()-t_train_start)/60))
@@ -204,22 +220,27 @@ def train(config):
     #write.add_hparams
 
     #save metrics
+    metrics = {key: (metrics_train[key], metrics_test[key]) for key in metrics_test.keys()}
+
     with open(res_path / exp_name, 'wb') as fout:
         pickle.dump(metrics, fout)
 
+def map_round_tensor(tensor, decimals=3, idx=0):
+    return list(map(lambda x: x.round(decimals), tensor[idx].detach().cpu().numpy()))
 
 def log_metrics(epoch, metrics_epoch, metrics, writer, mode='train'):
-    loss, acc, auc = (zip(*metrics_epoch))
+    loss, acc, auc, ap = (zip(*metrics_epoch))
+    stats = {'loss': loss,
+            'acc': acc,
+            'auc': auc,
+            'ap': ap
+    }
 
-    metrics['loss/' + mode].append(np.mean(loss))
-    metrics['acc/' + mode].append(np.mean(acc))
-    metrics['auc/' + mode].append(np.mean(auc))
-    writer.add_scalar('loss/' + mode, np.mean(loss), epoch)
-    writer.add_scalar('acc/' + mode, np.mean(acc), epoch)
-    writer.add_scalar('auc/' + mode, np.mean(auc), epoch)
-    writer.add_scalar('loss-var/' + mode, np.var(loss), epoch)
-    writer.add_scalar('acc-var/' + mode, np.var(acc), epoch)
-    writer.add_scalar('auc-var/' + mode, np.var(auc), epoch)
+    for key, val in stats.items():
+        metrics[key].append(np.mean(val))
+        #metrics[key + '/' + mode].append(np.mean(val))
+        writer.add_scalar(key + '/' + mode, np.mean(val), epoch)
+        writer.add_scalar(key + '-var/' + mode, np.var(val), epoch)
 
     return metrics
 
