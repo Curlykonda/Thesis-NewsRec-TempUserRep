@@ -64,7 +64,7 @@ def train(config):
 
     # data is indexed by user_ids
     dataset, vocab, news_as_word_ids, art_id2idx, u_id2idx = get_dpg_data(config.data_path, config.neg_sample_ratio,
-                                                                          config.max_hist_len, config.max_news_len)
+                                                                          config.max_hist_len, config.max_news_len, load_prepped=True)
     word_embeddings = get_embeddings_from_pretrained(vocab, emb_path=config.word_emb_path)
 
     train_data, test_data = train_test_split(dataset, test_size=0.2, shuffle=True, random_state=config.random_seed)
@@ -157,7 +157,7 @@ def train(config):
 
         #loss, acc, auc = zip(*metrics)
         t1 = time.time()
-        metrics_train = log_metrics(epoch, metrics_epoch, metrics_train, writer, config.log_mode)
+        metrics_train = log_metrics(epoch, metrics_epoch, metrics_train, writer, mode=config.log_mode)
 
         #evaluate on test set
         metrics_epoch = []
@@ -197,7 +197,7 @@ def train(config):
 
         # logging
         t2 = time.time()
-        metrics_test = log_metrics(epoch, metrics_epoch, metrics_test, writer, config.log_mode)
+        metrics_test = log_metrics(epoch, metrics_epoch, metrics_test, writer, mode=config.log_mode)
 
         print("\n {} epoch".format(epoch))
         print("TRAIN: BCE loss {:1.3f} \t acc {:0.3f} \t auc {:0.3f} \t ap {:0.3f} in {:0.1f}s".format(
@@ -257,7 +257,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
 
     #general
-    parser.add_argument('--random_seed', type=int, default=42,
+    parser.add_argument('--random_seed', type=int, default=44,
                         help='random seed for reproducibility')
 
     # input data
