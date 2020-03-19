@@ -150,7 +150,7 @@ def train(config):
             lbl_cpu = lbls.cpu()
 
             metrics_epoch.append((loss_bce.item(),
-                                  compute_acc_tensors(y_probs_softmax, lbls),
+                                  compute_acc_tensors(y_probs_cpu, lbl_cpu),
                                   roc_auc_score(lbl_cpu, y_probs_cpu), # TPR v. FPR with varying threshold
                                   average_precision_score(lbl_cpu, y_probs_cpu))) # \text{AP} = \sum_n (R_n - R_{n-1}) P_n
 
@@ -188,7 +188,7 @@ def train(config):
                     y_probs_cpu = y_probs_softmax.detach().cpu()
 
                 metrics_epoch.append((test_loss.item(),
-                                      compute_acc_tensors(y_probs_cpu, lbls),
+                                      compute_acc_tensors(y_probs_cpu, lbls.cpu()),
                                       roc_auc_score(lbls.cpu(), y_probs_cpu),
                                       average_precision_score(lbls.cpu(), y_probs_cpu)))
 
