@@ -197,7 +197,7 @@ def train(config):
 
         # logging
         t2 = time.time()
-        metrics_test = log_metrics(epoch, metrics_epoch, metrics_test, writer, mode='test')
+        metrics_test = log_metrics(epoch, metrics_epoch, metrics_test, writer)
 
         print("\n {} epoch".format(epoch))
         print("TRAIN: BCE loss {:1.3f} \t acc {:0.3f} \t auc {:0.3f} \t ap {:0.3f} in {:0.1f}s".format(
@@ -247,6 +247,8 @@ def log_metrics(epoch, metrics_epoch, metrics, writer, mode='mean'):
             metrics[key].append(val)
             writer.add_scalar(key + '/' + mode, val, epoch)
             writer.add_scalar(key + '-var/' + mode, val, epoch)
+        else:
+            raise NotImplementedError()
 
     return metrics
 
