@@ -92,14 +92,12 @@ def train(config):
         # logits are un-normalized scores
     optim = torch.optim.Adam(npa_model.parameters(), lr=0.001)
 
-
     now = datetime.now()
     date = now.strftime("%m-%d-%y")
     res_path = Path(config.results_path)
     res_path = res_path / date
     res_path.mkdir(parents=True, exist_ok=True)
 
-    exp_name = now.strftime("%H:%M") + '-metrics.pkl'
     writer = SummaryWriter(res_path) # logging
 
     metrics_train = defaultdict(list)
@@ -218,17 +216,20 @@ def train(config):
     print("\n---------- Done in {0:.2f} min ----------".format((time.time()-t_train_start)/60))
     #writer.add_figure()
     #write.add_hparams
+    writer.close()
 
     #save metrics
     metrics = {key: (metrics_train[key], metrics_test[key]) for key in metrics_test.keys()}
 
+    now = datetime.now()
+    exp_name = now.strftime("%H:%M") + '-metrics.pkl'
     with open(res_path / exp_name, 'wb') as fout:
         pickle.dump(metrics, fout)
 
 def map_round_tensor(tensor, decimals=3, idx=0):
     return list(map(lambda x: x.round(decimals), tensor[idx].detach().cpu().numpy()))
 
-def log_metrics(epoch, metrics_epoch, metrics, writer, mode='train'):
+def log_metrics(epoch, metrics_epoch, metrics, writer, mode='mean'):
     loss, acc, auc, ap = (zip(*metrics_epoch))
     stats = {'loss': loss,
             'acc': acc,
@@ -237,10 +238,15 @@ def log_metrics(epoch, metrics_epoch, metrics, writer, mode='train'):
     }
 
     for key, val in stats.items():
-        metrics[key].append(np.mean(val))
-        #metrics[key + '/' + mode].append(np.mean(val))
-        writer.add_scalar(key + '/' + mode, np.mean(val), epoch)
-        writer.add_scalar(key + '-var/' + mode, np.var(val), epoch)
+        if mode == 'mean':
+            metrics[key].append(np.mean(val))
+            writer.add_scalar(key + '/' + mode, np.mean(val), epoch)
+            writer.add_scalar(key + '-var/' + mode, np.var(val), epoch)
+
+        elif mode == 'batches':
+            metrics[key].append(val)
+            writer.add_scalar(key + '/' + mode, val, epoch)
+            writer.add_scalar(key + '-var/' + mode, val, epoch)
 
     return metrics
 
