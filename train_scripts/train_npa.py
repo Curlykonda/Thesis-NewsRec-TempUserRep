@@ -291,7 +291,7 @@ if __name__ == "__main__":
     parser.add_argument('--batch_size', type=int, default=100, help='batch size for training')
     parser.add_argument('--n_epochs', type=int, default=10, help='Epoch number for training')
     parser.add_argument('--lr', type=float, default=0.001, help='Learning rate')
-    parser.add_argument('--log_mod', type=str, default='mean', help='Mode for logging the metrics, e.g. average over batch or not')
+    parser.add_argument('--log_mode', type=str, default='mean', help='Mode for logging the metrics, e.g. average over batch or not')
 
     config = parser.parse_args()
 
