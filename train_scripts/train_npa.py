@@ -157,7 +157,7 @@ def train(config):
 
         #loss, acc, auc = zip(*metrics)
         t1 = time.time()
-        metrics_train = log_metrics(epoch, metrics_epoch, metrics_train, writer, mode=config.log_mode)
+        metrics_train = log_metrics(epoch, metrics_epoch, metrics_train, writer, mode=config.log_method)
 
         #evaluate on test set
         metrics_epoch = []
@@ -197,7 +197,7 @@ def train(config):
 
         # logging
         t2 = time.time()
-        metrics_test = log_metrics(epoch, metrics_epoch, metrics_test, writer, mode=config.log_mode)
+        metrics_test = log_metrics(epoch, metrics_epoch, metrics_test, writer, mode='test', method=config.log_method)
 
         print("\n {} epoch".format(epoch))
         print("TRAIN: BCE loss {:1.3f} \t acc {:0.3f} \t auc {:0.3f} \t ap {:0.3f} in {:0.1f}s".format(
@@ -229,7 +229,7 @@ def train(config):
 def map_round_tensor(tensor, decimals=3, idx=0):
     return list(map(lambda x: x.round(decimals), tensor[idx].detach().cpu().numpy()))
 
-def log_metrics(epoch, metrics_epoch, metrics, writer, mode='mean'):
+def log_metrics(epoch, metrics_epoch, metrics, writer, mode='train', method='mean'):
     loss, acc, auc, ap = (zip(*metrics_epoch))
     stats = {'loss': loss,
             'acc': acc,
@@ -238,12 +238,12 @@ def log_metrics(epoch, metrics_epoch, metrics, writer, mode='mean'):
     }
 
     for key, val in stats.items():
-        if mode == 'mean':
+        if method == 'mean':
             metrics[key].append(np.mean(val))
             writer.add_scalar(key + '/' + mode, np.mean(val), epoch)
             writer.add_scalar(key + '-var/' + mode, np.var(val), epoch)
 
-        elif mode == 'batches':
+        elif method == 'batches':
             metrics[key].append(val)
             writer.add_scalar(key + '/' + mode, val, epoch)
             writer.add_scalar(key + '-var/' + mode, val, epoch)
@@ -291,7 +291,7 @@ if __name__ == "__main__":
     parser.add_argument('--batch_size', type=int, default=100, help='batch size for training')
     parser.add_argument('--n_epochs', type=int, default=10, help='Epoch number for training')
     parser.add_argument('--lr', type=float, default=0.001, help='Learning rate')
-    parser.add_argument('--log_mode', type=str, default='mean', help='Mode for logging the metrics, e.g. average over batch or not')
+    parser.add_argument('--log_method', type=str, default='mean', help='Mode for logging the metrics, e.g. average over batch or not')
 
     config = parser.parse_args()
 
