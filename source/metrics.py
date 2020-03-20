@@ -22,5 +22,8 @@ def mrr_score(y_true, y_score):
     return np.sum(rr_score) / np.sum(y_true)
 
 def compute_acc_tensors(preds, targets):
-    acc = (preds.argmax(dim=1) == targets.argmax(dim=1)).sum().float() / targets.shape[0]
-    return acc.item()
+    if len(targets.shape) > 1:
+        acc = ((preds.argmax(dim=-1) == targets.argmax(dim=-1)).sum().float() / targets.shape[0]).item()
+    else:
+        acc = (preds == targets).sum().float() / targets.shape[0]
+    return acc

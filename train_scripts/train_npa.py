@@ -14,13 +14,13 @@ from torch.utils.tensorboard import SummaryWriter
 
 
 from sklearn.model_selection import train_test_split
-from sklearn.metrics import roc_auc_score, average_precision_score
+from sklearn.metrics import roc_auc_score, average_precision_score, accuracy_score
 
 import sys
 sys.path.append("..")
 
 from source.my_datasets import DPG_Dataset
-from source.models.NPA import NPA_wu
+from source.models.NPA import NPA_wu, init_weights
 from source.utils_npa import get_dpg_data, get_embeddings_from_pretrained
 from source.metrics import *
 
@@ -47,13 +47,52 @@ def try_var_loss_funcs(logits, targets, i_batch):
     print("CE softm {0:.3f} \t sigmoid {0:.3f}".format(ce(softm_probs, targets.argmax(dim=1)), ce(log_softm_probs, targets.argmax(dim=1))))
     print("NLL softm {0:.3f} \t log softm {0:.3f}".format(nll(softm_probs, targets.argmax(dim=1)), nll(log_softm_probs, targets.argmax(dim=1))))
 
-def train(config):
+def test_eval_like_npa_wu(model, test_generator):
+    metrics_epoch = []
+
+    # difference: select a single cand-target pair + sigmoid activation
+    metrics_epoch = []
+    model.eval()
+    device = torch.device(model.device)
+
+    with torch.no_grad():
+        for sample in test_generator:
+            user_ids, brows_hist, candidates = sample['input']
+            lbls = sample['labels']
+            # sub sample single candidate + label for inference
+            candidate_one = candidates[:, 1].unsqueeze(1)
+            lbls = lbls[:, 1].float().to(device)
+
+            # forward pass
+            logits = model(user_ids.long().to(device), brows_hist.long().to(device),
+                               candidate_one.long().to(device))
+
+            y_probs_sigmoid = torch.sigmoid(logits)
+            y_probs_cpu = y_probs_sigmoid.detach().cpu()
+            # compute loss
+            test_loss = nn.BCEWithLogitsLoss()(logits, lbls)
+
+            metrics_epoch.append((test_loss.item(),
+                                  compute_acc_tensors(y_probs_cpu, lbls.cpu()),
+                                  roc_auc_score(lbls.cpu(), y_probs_cpu),
+                                  average_precision_score(lbls.cpu(), y_probs_cpu)))
+
+            # precision, recall, thresholds = precision_recall_curve(y_true, y_scores)
+
+            if device.type == 'cpu':
+                break
+    eval_str = ("\nLogits {} \nSigm p {} \nTargets {}".format(
+        map_round_tensor(logits, idx=5), map_round_tensor(y_probs_sigmoid, idx=5), lbls[:5].cpu().numpy().tolist()))
+
+    return metrics_epoch, eval_str
+
+def main(config):
 
     # set device
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
     train_params = { 'batch_size': config.batch_size,
-                     'shuffle': True}
+                     'random_seed': config.random_seed}
 
     hyper_params = {'lr': None, 'neg_sample_ratio': None} # TODO: aggregate h_params for SummaryWriter
 
@@ -81,6 +120,8 @@ def train(config):
                        emb_dim_user_id=50, emb_dim_pref_query=200, emb_dim_words=300, max_title_len=config.max_hist_len)
     npa_model.to(device)
     #
+    #npa_model.apply(init_weights)
+    #
     #optim & loss
     if config.bce_logits:
         #crit_bce_logits = nn.BCEWithLogitsLoss()
@@ -92,109 +133,49 @@ def train(config):
         # logits are un-normalized scores
     optim = torch.optim.Adam(npa_model.parameters(), lr=0.001)
 
+    # create dir for logging
     now = datetime.now()
     date = now.strftime("%m-%d-%y")
+
     res_path = Path(config.results_path)
     res_path = res_path / date
+    try:
+        n_exp = len(os.listdir(res_path)) + 1
+    except:
+        n_exp = 1
+
+    #exp_name = create_exp_name(n_exp, now, config)
+    exp_name = 'exp' + str(n_exp) + '-' + now.strftime("%H:%M")
+
+    res_path = res_path / exp_name
+
     res_path.mkdir(parents=True, exist_ok=True)
 
     writer = SummaryWriter(res_path) # logging
 
     metrics_train = defaultdict(list)
     metrics_test = defaultdict(list)
+
     print_shapes = False
     DEBUG = True
-
+    #
+    ##########################
+    # training
     t_train_start = time.time()
     for epoch in range(config.n_epochs):
         t0 = time.time()
         npa_model.train()
 
-        metrics_epoch = []
-
-        for i_batch, sample in enumerate(train_generator):  # (hist_as_word_ids, cands_as_word_ids, u_id), labels
-            npa_model.zero_grad()
-            user_ids, brows_hist, candidates = sample['input']
-            lbls = sample['labels']
-            lbls = lbls.float().to(device)
-
-            # forward pass
-            logits = npa_model(user_ids.long().to(device), brows_hist.long().to(device), candidates.long().to(device))
-            if print_shapes:
-                npa_model.get_representation_shapes()
-                print_shapes = False
-
-            y_probs_softmax = torch.nn.functional.softmax(logits, dim=-1)
-            y_probs_sigmoid = torch.sigmoid(logits)
-            y_preds = y_probs_softmax.argmax(dim=1)
-
-            # compute loss
-            if config.bce_logits:
-                loss_bce = criterion(logits, lbls) #loss_bce_logits, i.e. raw click scores
-                y_probs_cpu = y_probs_sigmoid.detach().cpu()
-            else:
-                loss_bce = criterion(y_probs_softmax, lbls) # bce with softmax probabilities
-                y_probs_cpu = y_probs_softmax.detach().cpu()
-
-            #try_var_loss_funcs(logits, lbls, i_batch)
-
-            # optimiser backward
-            optim.zero_grad()
-            loss_bce.backward()
-            #torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=config.max_norm)
-            optim.step()
-
-            # add metrics
-            lbl_cpu = lbls.cpu()
-
-            metrics_epoch.append((loss_bce.item(),
-                                  compute_acc_tensors(y_probs_cpu, lbl_cpu),
-                                  roc_auc_score(lbl_cpu, y_probs_cpu), # TPR v. FPR with varying threshold
-                                  average_precision_score(lbl_cpu, y_probs_cpu))) # \text{AP} = \sum_n (R_n - R_{n-1}) P_n
-
-            if device.type == 'cpu':
-                break
+        metrics_epoch = train_npa_wu_softmax(npa_model, criterion, optim, train_generator)
 
         #loss, acc, auc = zip(*metrics)
         t1 = time.time()
-        metrics_train = log_metrics(epoch, metrics_epoch, metrics_train, writer, mode=config.log_method)
-
+        metrics_train = log_metrics(epoch, metrics_epoch, metrics_train, writer, method=config.log_method)
+        #
+        #####################
+        #
         #evaluate on test set
-        metrics_epoch = []
-        npa_model.eval()
-
-        with torch.no_grad():
-            for sample in test_generator:
-                user_ids, brows_hist, candidates = sample['input']
-                lbls = sample['labels']
-                lbls = lbls.float().to(device)
-
-                # forward pass
-                logits = npa_model(user_ids.long().to(device), brows_hist.long().to(device),
-                                   candidates.long().to(device))
-
-                y_probs_softmax = torch.nn.functional.softmax(logits, dim=-1)
-                y_probs_sigmoid = torch.sigmoid(logits)
-                y_preds = y_probs_softmax.argmax(dim=1)
-
-                # compute loss
-                if config.bce_logits:
-                    test_loss = criterion(logits, lbls)  # loss_bce_logits, i.e. raw click scores
-                    y_probs_cpu = y_probs_sigmoid.detach().cpu()
-                else:
-                    test_loss = criterion(y_probs_softmax, lbls)  # bce with softmax probabilities
-                    y_probs_cpu = y_probs_softmax.detach().cpu()
-
-                metrics_epoch.append((test_loss.item(),
-                                      compute_acc_tensors(y_probs_cpu, lbls.cpu()),
-                                      roc_auc_score(lbls.cpu(), y_probs_cpu),
-                                      average_precision_score(lbls.cpu(), y_probs_cpu)))
-
-                #precision, recall, thresholds = precision_recall_curve(y_true, y_scores)
-
-                if device.type == 'cpu':
-                    break
-
+        metrics_epoch, eval_msg = test_eval_like_npa_wu(npa_model, test_generator)
         # logging
         t2 = time.time()
         metrics_test = log_metrics(epoch, metrics_epoch, metrics_test, writer, mode='test', method=config.log_method)
@@ -205,10 +186,7 @@ def train(config):
         print("TEST: BCE loss {:1.3f}  \t acc {:0.3f} \t auc {:0.3f} \t ap {:0.3f} in {:0.1f}s".format(
                 metrics_test['loss'][-1], metrics_test['acc'][-1], metrics_test['auc'][-1], metrics_test['ap'][-1], (t2-t1)))
 
-        print("\nLogits {}".format(map_round_tensor(logits)))
-        print("Softm p {}".format(map_round_tensor(y_probs_softmax)))
-        print("Sigm p {}".format(map_round_tensor(y_probs_sigmoid)))
-        print("Targets {}".format(lbls[0].cpu().numpy().tolist()))
+        print(eval_msg)
 
         if device.type == 'cpu':
             break
@@ -221,13 +199,65 @@ def train(config):
     #save metrics
     metrics = {key: (metrics_train[key], metrics_test[key]) for key in metrics_test.keys()}
 
-    now = datetime.now()
-    exp_name = now.strftime("%H:%M") + '-metrics.pkl'
-    with open(res_path / exp_name, 'wb') as fout:
+    '''
+    results
+     |--date
+        |--exp1
+        |--exp2
+        |--exp3
+    '''
+
+    #exp_name = now.strftime("%H:%M") + '-metrics.pkl'
+    with open(res_path / 'metrics.pkl', 'wb') as fout:
         pickle.dump(metrics, fout)
 
+
+def train_npa_wu_softmax(npa_model, criterion, optim, train_generator):
+    metrics_epoch = []
+    npa_model.train()
+    device = torch.device(npa_model.device)
+
+    for i_batch, sample in enumerate(train_generator):  # (hist_as_word_ids, cands_as_word_ids, u_id), labels
+        npa_model.zero_grad()
+        user_ids, brows_hist, candidates = sample['input']
+        lbls = sample['labels']
+        lbls = lbls.float().to(device)
+
+        # forward pass
+        logits = npa_model(user_ids.long().to(device), brows_hist.long().to(device), candidates.long().to(device))
+
+        y_probs_softmax = torch.nn.functional.softmax(logits, dim=-1)
+
+        # compute loss
+        loss_bce = criterion(y_probs_softmax, lbls)
+
+        # try_var_loss_funcs(logits, lbls, i_batch)
+
+        # optimiser backward
+        optim.zero_grad()
+        loss_bce.backward()
+        # torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=config.max_norm)
+        optim.step()
+
+        # add metrics
+        lbl_cpu = lbls.cpu()
+        y_probs_cpu = y_probs_softmax.detach().cpu()
+
+        metrics_epoch.append((loss_bce.item(),
+                              compute_acc_tensors(y_probs_cpu, lbl_cpu),
+                              roc_auc_score(lbl_cpu, y_probs_cpu),  # TPR v. FPR with varying threshold
+                              average_precision_score(lbl_cpu, y_probs_cpu)))  # \text{AP} = \sum_n (R_n - R_{n-1}) P_n
+
+        if device.type == 'cpu' and i_batch > 0:
+            break
+    return metrics_epoch
+
+
 def map_round_tensor(tensor, decimals=3, idx=0):
-    return list(map(lambda x: x.round(decimals), tensor[idx].detach().cpu().numpy()))
+    if len(tensor.shape) > 1:
+        return list(map(lambda x: x.round(decimals), tensor[idx].detach().cpu().numpy()))
+    else:
+        return list(map(lambda x: x.round(decimals), tensor[:idx].detach().cpu().numpy()))
 
 def log_metrics(epoch, metrics_epoch, metrics, writer, mode='train', method='mean'):
     loss, acc, auc, ap = (zip(*metrics_epoch))
@@ -244,9 +274,12 @@ def log_metrics(epoch, metrics_epoch, metrics, writer, mode='train', method='mea
             writer.add_scalar(key + '-var/' + mode, np.var(val), epoch)
 
         elif method == 'batches':
-            metrics[key].append(val)
-            writer.add_scalar(key + '/' + mode, val, epoch)
-            writer.add_scalar(key + '-var/' + mode, val, epoch)
+            for v in val:
+                writer.add_scalar(key + '/' + mode, v, len(metrics[key]))
+                writer.add_scalar(key + '-var/' + mode, v, len(metrics[key]))
+
+                metrics[key].append(v)
+
         else:
             raise NotImplementedError()
 
@@ -257,7 +290,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
 
     #general
-    parser.add_argument('--random_seed', type=int, default=44,
+    parser.add_argument('--random_seed', type=int, default=42,
                         help='random seed for reproducibility')
 
     # input data
@@ -275,7 +308,7 @@ if __name__ == "__main__":
     parser.add_argument('--word_emb_path', type=str, default='../embeddings/glove_eng.840B.300d.txt',
                         help='path to directory with word embeddings')
 
-    parser.add_argument('--results_path', type=str, default='../results/exp1/', help='path to save metrics')
+    parser.add_argument('--results_path', type=str, default='../results/', help='path to save metrics')
 
     # preprocessing
     parser.add_argument('--max_hist_len', type=int, default=50,
@@ -291,8 +324,8 @@ if __name__ == "__main__":
     parser.add_argument('--batch_size', type=int, default=100, help='batch size for training')
     parser.add_argument('--n_epochs', type=int, default=10, help='Epoch number for training')
     parser.add_argument('--lr', type=float, default=0.001, help='Learning rate')
-    parser.add_argument('--log_method', type=str, default='mean', help='Mode for logging the metrics, e.g. average over batch or not')
+    parser.add_argument('--log_method', type=str, default='batches', help='Mode for logging the metrics, e.g. average over batch or not')
 
     config = parser.parse_args()
 
-    train(config)
+    main(config)
