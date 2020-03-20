@@ -23,8 +23,8 @@ python --version
 python -u train_npa.py --word_emb_path="../embeddings/cc.nl.300.bin"
 python -u train_npa.py --word_emb_path="../embeddings/cc.nl.300.bin" --bce_logits=1
 
-python -u train_npa.py --word_emb_path="../embeddings/cc.nl.300.bin" --log_mode='batches'
-python -u train_npa.py --word_emb_path="../embeddings/cc.nl.300.bin" --bce_logits=1 --log_mode='batches'
+python -u train_npa.py --word_emb_path="../embeddings/cc.nl.300.bin" --log_method='batches'
+python -u train_npa.py --word_emb_path="../embeddings/cc.nl.300.bin" --bce_logits=1 --log_method='batches'
 
 #cp -r $outdir $workdir
 

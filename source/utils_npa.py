@@ -3,21 +3,16 @@ import csv
 import random
 import nltk
 from nltk.tokenize import word_tokenize
-
 from collections import defaultdict, Counter
-
-import datetime
-import time
-import random
-import itertools
 import numpy as np
 import pickle
+import torch
+import torch.nn as nn
 
 import fasttext
 
 from source.utils import get_art_id_from_dpg_history, build_vocab_from_word_counts, pad_sequence, reverse_mapping_dict
 from sklearn.model_selection import train_test_split
-#from sklearn.feature_extraction.text import CountVectorizer, TfidfVectorizer
 
 
 
@@ -280,6 +275,19 @@ def get_dpg_data(data_path, neg_sample_ratio=4, max_hist_len=50, max_article_len
                                         neg_sample_ratio=neg_sample_ratio, max_hist_len=max_hist_len)
 
     return data, vocab, news_as_word_ids, art_id2idx, u_id2idx
+
+def init_weights(m):
+    if isinstance(m, nn.Linear):
+        torch.nn.init.xavier_uniform_(m.weight)
+        m.bias.data.fill_(0.01)
+    if isinstance(m, nn.Conv1d):
+        torch.nn.init.xavier_uniform_(m.weight)
+        if m.bias is not None:
+            torch.nn.init.zeros_(m.bias)
+    if isinstance(m, nn.Conv2d):
+        torch.nn.init.xavier_uniform_(m.weight)
+        if m.bias is not None:
+            torch.nn.init.zeros_(m.bias)
 
 def main(config):
 

@@ -1,30 +1,6 @@
-import argparse
-import os
-import json
-import gzip
-import pickle
-import time
-import numpy as np
-import pandas as pd
-from collections import defaultdict
-
-#import torch
-
 import sys
 sys.path.append("..")
 
-#import warnings
-#warnings.filterwarnings('ignore')
-
-#import matplotlib.pyplot as plt
-from datetime import datetime
-from tqdm import tqdm
-
-import nltk
-from nltk.tokenize import word_tokenize, sent_tokenize
-
-#from transformers import BertTokenizer, BertModel
-#import torch
 
 
 def pad_sequence(seq, max_len, pad_value=0, pad='post', trunc='last'):
