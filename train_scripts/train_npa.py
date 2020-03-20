@@ -198,17 +198,8 @@ def main(config):
 
     #save metrics
     metrics = {key: (metrics_train[key], metrics_test[key]) for key in metrics_test.keys()}
-
-    '''
-    results
-     |--date
-        |--exp1
-        |--exp2
-        |--exp3
-    '''
-
-    #exp_name = now.strftime("%H:%M") + '-metrics.pkl'
-    with open(res_path / 'metrics.pkl', 'wb') as fout:
+    exp = "metrics_" + config.log_method + '.pkl'
+    with open(res_path / exp, 'wb') as fout:
         pickle.dump(metrics, fout)
 
 
