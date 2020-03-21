@@ -102,6 +102,7 @@ def train_npa_wu_softmax(npa_model, criterion, optim, train_generator):
         # forward pass
         logits = npa_model(user_ids.long().to(device), brows_hist.long().to(device), candidates.long().to(device))
 
+        # activation function
         y_probs_softmax = torch.nn.functional.softmax(logits, dim=-1)
 
         # compute loss
@@ -133,7 +134,7 @@ def main(config):
     # set device
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     print(device)
-    print_setting(['random_seed', 'log_method'])
+    print_setting(config, ['random_seed', 'log_method'])
 
     hyper_params = {'lr': None, 'neg_sample_ratio': None,
                     'batch_size': config.batch_size,
