@@ -70,7 +70,7 @@ def test_eval_npa_softmax(model, test_generator):
             y_probs = torch.nn.functional.softmax(logits, dim=1)
             y_probs_cpu = y_probs.detach().cpu()
             # compute loss
-            test_loss = nn.BCE()(y_probs, lbls)
+            test_loss = nn.BCELoss()(y_probs, lbls)
 
             metrics_epoch.append((test_loss.item(),
                                   compute_acc_tensors(y_probs_cpu, lbls.cpu()),
