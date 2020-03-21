@@ -54,6 +54,7 @@ def test_eval_like_npa_wu(model, test_generator):
     metrics_epoch = []
     model.eval()
     device = torch.device(model.device)
+    print("Test device {}".format(device))
 
     with torch.no_grad():
         for sample in test_generator:
@@ -90,7 +91,7 @@ def main(config):
 
     # set device
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-
+    print(device)
 
     hyper_params = {'lr': None, 'neg_sample_ratio': None,
                     'batch_size': config.batch_size,
@@ -214,6 +215,7 @@ def train_npa_wu_softmax(npa_model, criterion, optim, train_generator):
     metrics_epoch = []
     npa_model.train()
     device = torch.device(npa_model.device)
+    print("Train device {}".format(device))
 
     for i_batch, sample in enumerate(train_generator):  # (hist_as_word_ids, cands_as_word_ids, u_id), labels
         npa_model.zero_grad()
