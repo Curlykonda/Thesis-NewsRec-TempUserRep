@@ -131,14 +131,7 @@ def main(config):
     #npa_model.apply(init_weights)
     #
     #optim & loss
-    if config.bce_logits:
-        #crit_bce_logits = nn.BCEWithLogitsLoss()
-        criterion = nn.BCEWithLogitsLoss() # raw_score -> nn.Sigmoid() -> BCE loss
-        print("using BCE with Logits")
-    else:
-        #crit_bce = nn.BCELoss()
-        criterion = nn.BCELoss() # raw_scores (logits) -> Softmax -> BCE loss
-        # logits are un-normalized scores
+    criterion = nn.BCELoss() # raw_scores (logits) -> Softmax -> BCE loss
     optim = torch.optim.Adam(npa_model.parameters(), lr=0.001)
 
     # create dir for logging
