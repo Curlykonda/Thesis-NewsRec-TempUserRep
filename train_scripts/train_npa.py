@@ -48,7 +48,7 @@ def try_var_loss_funcs(logits, targets, i_batch):
     print("CE softm {0:.3f} \t sigmoid {0:.3f}".format(ce(softm_probs, targets.argmax(dim=1)), ce(log_softm_probs, targets.argmax(dim=1))))
     print("NLL softm {0:.3f} \t log softm {0:.3f}".format(nll(softm_probs, targets.argmax(dim=1)), nll(log_softm_probs, targets.argmax(dim=1))))
 
-def test_eval_like_npa_wu(model, test_generator):
+def test_eval_like_npa_wu(model, test_generator, one_candidate=True):
     metrics_epoch = []
 
     # difference: select a single cand-target pair + sigmoid activation
@@ -60,13 +60,15 @@ def test_eval_like_npa_wu(model, test_generator):
         for sample in test_generator:
             user_ids, brows_hist, candidates = sample['input']
             lbls = sample['labels']
+            lbls = lbls.float().to(device)
             # sub sample single candidate + label for inference
-            candidate_one = candidates[:, 1].unsqueeze(1)
-            lbls = lbls[:, 1].float().to(device)
+            if one_candidate:
+                candidates = candidates[:, 1].unsqueeze(1)
+                lbls = lbls[:, 1]
 
             # forward pass
             logits = model(user_ids.long().to(device), brows_hist.long().to(device),
-                               candidate_one.long().to(device))
+                               candidates.long().to(device))
 
             y_probs_sigmoid = torch.sigmoid(logits)
             y_probs_cpu = y_probs_sigmoid.detach().cpu()
@@ -82,8 +84,13 @@ def test_eval_like_npa_wu(model, test_generator):
 
             if device.type == 'cpu':
                 break
+    idx = 5
+    if one_candidate:
+        tgts = lbls[:idx].cpu().numpy().tolist()
+    else:
+        tgts = lbls[idx].cpu().numpy().tolist()
     eval_str = ("\nLogits {} \nSigm p {} \nTargets {}".format(
-        map_round_tensor(logits, idx=5), map_round_tensor(y_probs_sigmoid, idx=5), lbls[:5].cpu().numpy().tolist()))
+        map_round_tensor(logits, idx=idx), map_round_tensor(y_probs_sigmoid, idx=idx), tgts))
 
     return metrics_epoch, eval_str
 
@@ -91,7 +98,6 @@ def train_npa_wu_softmax(npa_model, criterion, optim, train_generator):
     metrics_epoch = []
     npa_model.train()
     device = torch.device(npa_model.device)
-    print("Train device {}".format(device))
 
     for i_batch, sample in enumerate(train_generator):  # (hist_as_word_ids, cands_as_word_ids, u_id), labels
         npa_model.zero_grad()
@@ -126,6 +132,7 @@ def train_npa_wu_softmax(npa_model, criterion, optim, train_generator):
                               average_precision_score(lbl_cpu, y_probs_cpu)))  # \text{AP} = \sum_n (R_n - R_{n-1}) P_n
 
         if device.type == 'cpu' and i_batch > 0:
+            print("Stopped after {} batches".format(i_batch + 1))
             break
     return metrics_epoch
 
@@ -134,7 +141,7 @@ def main(config):
     # set device
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     print(device)
-    print_setting(config, ['random_seed', 'log_method'])
+    print_setting(config, ['random_seed', 'log_method', 'test_w_one'])
 
     hyper_params = {'lr': None, 'neg_sample_ratio': None,
                     'batch_size': config.batch_size,
@@ -163,7 +170,7 @@ def main(config):
     #
     model_params = {'n_users': len(dataset), 'vocab_len': len(vocab),
                     'dim_user_id': 50, 'dim_pref_query': 200, 'dim_words': 300,
-                    'max_title_len': config.max_hist_len, 'device': device  }
+                    'max_title_len': config.max_hist_len, 'device': device}
 
 
     npa_model = NPA_wu(n_users=len(dataset), vocab_len=len(vocab), pretrained_emb=word_embeddings,
@@ -219,7 +226,7 @@ def main(config):
         #####################
         #
         #evaluate on test set
-        metrics_epoch, eval_msg = test_eval_like_npa_wu(npa_model, test_generator)
+        metrics_epoch, eval_msg = test_eval_like_npa_wu(npa_model, test_generator, one_candidate=config.test_w_one)
         # logging
         t2 = time.time()
         metrics_test = log_metrics(epoch, metrics_epoch, metrics_test, writer, mode='test', method=config.log_method)
@@ -248,6 +255,8 @@ def main(config):
 
 def map_round_tensor(tensor, decimals=3, idx=0):
     if len(tensor.shape) > 1:
+        if idx > tensor.shape[0]:
+            idx = -1
         return list(map(lambda x: x.round(decimals), tensor[idx].detach().cpu().numpy()))
     else:
         return list(map(lambda x: x.round(decimals), tensor[:idx].detach().cpu().numpy()))
@@ -317,7 +326,8 @@ if __name__ == "__main__":
     parser.add_argument('--batch_size', type=int, default=100, help='batch size for training')
     parser.add_argument('--n_epochs', type=int, default=10, help='Epoch number for training')
     parser.add_argument('--lr', type=float, default=0.001, help='Learning rate')
-    parser.add_argument('--log_method', type=str, default='batches', help='Mode for logging the metrics, e.g. average over batch or not')
+    parser.add_argument('--log_method', type=str, default='mean', help='Mode for logging the metrics: [mean, batches]')
+    parser.add_argument('--test_w_one', type=bool, default=False, help='use only 1 candidate during testing')
 
     config = parser.parse_args()
 
