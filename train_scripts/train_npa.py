@@ -237,7 +237,9 @@ def main(config):
         n_exp = 1
 
     #exp_name = create_exp_name(n_exp, now, config)
-    exp_name = 'exp' + str(n_exp) + '-' + now.strftime("%H:%M")
+    exp_name = 'exp' + str(n_exp) + config.log_method \
+               + '-' + config.eval_method\
+               + '-' + now.strftime("%H:%M")
 
     res_path = res_path / exp_name
 
@@ -293,6 +295,7 @@ def main(config):
 
     #save metrics
     metrics = {key: (metrics_train[key], metrics_test[key]) for key in metrics_test.keys()}
+
     exp = "metrics_" + config.log_method + '.pkl'
     with open(res_path / exp, 'wb') as fout:
         pickle.dump(metrics, fout)
