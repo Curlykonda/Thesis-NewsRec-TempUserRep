@@ -42,12 +42,13 @@ class NPA(torch.nn.Module):
 class NPA_wu(nn.Module):
 
     def __init__(self, n_users, vocab_len, pretrained_emb, emb_dim_user_id=50, emb_dim_pref_query=200,
-                 emb_dim_words=300, max_title_len=30, n_filters_cnn=400, dropout_p=0.2, device='cpu'):
+                 emb_dim_words=300, max_news_len=30, n_filters_cnn=400, dropout_p=0.2, device='cpu'):
         super(NPA_wu, self).__init__()
 
         self.device = device
         self.vocab_len = vocab_len
-        self.max_title_len = max_title_len
+        self.max_title_len = max_news_len
+        self.max_hist_len = None
 
         self.dim_news_rep = n_filters_cnn
         self.dim_user_rep = n_filters_cnn

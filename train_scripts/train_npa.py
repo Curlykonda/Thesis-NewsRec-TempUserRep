@@ -91,10 +91,10 @@ def main(config):
     # set device
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
-    train_params = { 'batch_size': config.batch_size,
-                     'random_seed': config.random_seed}
 
-    hyper_params = {'lr': None, 'neg_sample_ratio': None} # TODO: aggregate h_params for SummaryWriter
+    hyper_params = {'lr': None, 'neg_sample_ratio': None,
+                    'batch_size': config.batch_size,
+                     'random_seed': config.random_seed} # TODO: aggregate h_params for SummaryWriter
 
     #set random seeds
     torch.manual_seed(config.random_seed)
@@ -116,8 +116,15 @@ def main(config):
     print("Train on {} samples".format(train_dataset.__len__()))
     #
     # build model
+    #
+    model_params = {'n_users': len(dataset), 'vocab_len': len(vocab),
+                    'dim_user_id': 50, 'dim_pref_query': 200, 'dim_words': 300,
+                    'max_title_len': config.max_hist_len, 'device': device  }
+
+
     npa_model = NPA_wu(n_users=len(dataset), vocab_len=len(vocab), pretrained_emb=word_embeddings,
-                       emb_dim_user_id=50, emb_dim_pref_query=200, emb_dim_words=300, max_title_len=config.max_hist_len)
+                       emb_dim_user_id=50, emb_dim_pref_query=200, emb_dim_words=300,
+                       max_news_len=config.max_news_len, device=device)
     npa_model.to(device)
     #
     #npa_model.apply(init_weights)
