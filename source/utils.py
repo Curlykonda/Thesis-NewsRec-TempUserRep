@@ -47,6 +47,11 @@ def reverse_mapping_dict(item2idx):
     return {idx: item for item, idx in item2idx.items()}
 
 
+def print_setting(config, valid_keys):
+    for key, value in vars(config).items():
+        if key in valid_keys:
+            print("{0}: {1}".format(key, value))
+
 # def create_checkpoint(check_dir, filename, dataset, model, optimizer, results, step):
 #
 #     checkpoint_path = check_dir / (f'{filename}_step_{step}.pt')

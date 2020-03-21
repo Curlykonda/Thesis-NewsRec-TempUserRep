@@ -22,6 +22,7 @@ sys.path.append("..")
 from source.my_datasets import DPG_Dataset
 from source.models.NPA import NPA_wu, init_weights
 from source.utils_npa import get_dpg_data, get_embeddings_from_pretrained
+from source.utils import print_setting
 from source.metrics import *
 
 def try_var_loss_funcs(logits, targets, i_batch):
@@ -54,7 +55,6 @@ def test_eval_like_npa_wu(model, test_generator):
     metrics_epoch = []
     model.eval()
     device = torch.device(model.device)
-    print("Test device {}".format(device))
 
     with torch.no_grad():
         for sample in test_generator:
@@ -87,11 +87,53 @@ def test_eval_like_npa_wu(model, test_generator):
 
     return metrics_epoch, eval_str
 
+def train_npa_wu_softmax(npa_model, criterion, optim, train_generator):
+    metrics_epoch = []
+    npa_model.train()
+    device = torch.device(npa_model.device)
+    print("Train device {}".format(device))
+
+    for i_batch, sample in enumerate(train_generator):  # (hist_as_word_ids, cands_as_word_ids, u_id), labels
+        npa_model.zero_grad()
+        user_ids, brows_hist, candidates = sample['input']
+        lbls = sample['labels']
+        lbls = lbls.float().to(device)
+
+        # forward pass
+        logits = npa_model(user_ids.long().to(device), brows_hist.long().to(device), candidates.long().to(device))
+
+        y_probs_softmax = torch.nn.functional.softmax(logits, dim=-1)
+
+        # compute loss
+        loss_bce = criterion(y_probs_softmax, lbls)
+
+        # try_var_loss_funcs(logits, lbls, i_batch)
+
+        # optimiser backward
+        optim.zero_grad()
+        loss_bce.backward()
+        # torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=config.max_norm)
+        optim.step()
+
+        # add metrics
+        lbl_cpu = lbls.cpu()
+        y_probs_cpu = y_probs_softmax.detach().cpu()
+
+        metrics_epoch.append((loss_bce.item(),
+                              compute_acc_tensors(y_probs_cpu, lbl_cpu),
+                              roc_auc_score(lbl_cpu, y_probs_cpu),  # TPR v. FPR with varying threshold
+                              average_precision_score(lbl_cpu, y_probs_cpu)))  # \text{AP} = \sum_n (R_n - R_{n-1}) P_n
+
+        if device.type == 'cpu' and i_batch > 0:
+            break
+    return metrics_epoch
+
 def main(config):
 
     # set device
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     print(device)
+    print_setting(['random_seed', 'log_method'])
 
     hyper_params = {'lr': None, 'neg_sample_ratio': None,
                     'batch_size': config.batch_size,
@@ -202,49 +244,6 @@ def main(config):
     exp = "metrics_" + config.log_method + '.pkl'
     with open(res_path / exp, 'wb') as fout:
         pickle.dump(metrics, fout)
-
-
-def train_npa_wu_softmax(npa_model, criterion, optim, train_generator):
-    metrics_epoch = []
-    npa_model.train()
-    device = torch.device(npa_model.device)
-    print("Train device {}".format(device))
-
-    for i_batch, sample in enumerate(train_generator):  # (hist_as_word_ids, cands_as_word_ids, u_id), labels
-        npa_model.zero_grad()
-        user_ids, brows_hist, candidates = sample['input']
-        lbls = sample['labels']
-        lbls = lbls.float().to(device)
-
-        # forward pass
-        logits = npa_model(user_ids.long().to(device), brows_hist.long().to(device), candidates.long().to(device))
-
-        y_probs_softmax = torch.nn.functional.softmax(logits, dim=-1)
-
-        # compute loss
-        loss_bce = criterion(y_probs_softmax, lbls)
-
-        # try_var_loss_funcs(logits, lbls, i_batch)
-
-        # optimiser backward
-        optim.zero_grad()
-        loss_bce.backward()
-        # torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=config.max_norm)
-        optim.step()
-
-        # add metrics
-        lbl_cpu = lbls.cpu()
-        y_probs_cpu = y_probs_softmax.detach().cpu()
-
-        metrics_epoch.append((loss_bce.item(),
-                              compute_acc_tensors(y_probs_cpu, lbl_cpu),
-                              roc_auc_score(lbl_cpu, y_probs_cpu),  # TPR v. FPR with varying threshold
-                              average_precision_score(lbl_cpu, y_probs_cpu)))  # \text{AP} = \sum_n (R_n - R_{n-1}) P_n
-
-        if device.type == 'cpu' and i_batch > 0:
-            break
-    return metrics_epoch
-
 
 def map_round_tensor(tensor, decimals=3, idx=0):
     if len(tensor.shape) > 1:
