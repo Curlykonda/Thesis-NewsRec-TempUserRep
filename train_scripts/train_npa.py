@@ -48,6 +48,46 @@ def try_var_loss_funcs(logits, targets, i_batch):
     print("CE softm {0:.3f} \t sigmoid {0:.3f}".format(ce(softm_probs, targets.argmax(dim=1)), ce(log_softm_probs, targets.argmax(dim=1))))
     print("NLL softm {0:.3f} \t log softm {0:.3f}".format(nll(softm_probs, targets.argmax(dim=1)), nll(log_softm_probs, targets.argmax(dim=1))))
 
+def test_eval_npa_softmax(model, test_generator):
+    metrics_epoch = []
+
+    # difference: select a single cand-target pair + sigmoid activation
+    metrics_epoch = []
+    model.eval()
+    device = torch.device(model.device)
+
+    with torch.no_grad():
+        for sample in test_generator:
+            user_ids, brows_hist, candidates = sample['input']
+            lbls = sample['labels']
+            lbls = lbls.float().to(device)
+            # sub sample single candidate + label for inference
+
+            # forward pass
+            logits = model(user_ids.long().to(device), brows_hist.long().to(device),
+                           candidates.long().to(device))
+
+            y_probs = torch.nn.functional.softmax(logits, dim=1)
+            y_probs_cpu = y_probs.detach().cpu()
+            # compute loss
+            test_loss = nn.BCE()(y_probs, lbls)
+
+            metrics_epoch.append((test_loss.item(),
+                                  compute_acc_tensors(y_probs_cpu, lbls.cpu()),
+                                  roc_auc_score(lbls.cpu(), y_probs_cpu),
+                                  average_precision_score(lbls.cpu(), y_probs_cpu)))
+
+            # precision, recall, thresholds = precision_recall_curve(y_true, y_scores)
+
+            if device.type == 'cpu':
+                break
+    idx = 5
+    tgts = lbls[idx].cpu().numpy().tolist()
+    eval_str = ("\nLogits {} \nSigm p {} \nTargets {}".format(
+        map_round_tensor(logits, idx=idx), map_round_tensor(y_probs, idx=idx), tgts))
+
+    return metrics_epoch, eval_str
+
 def test_eval_like_npa_wu(model, test_generator, one_candidate=True):
     metrics_epoch = []
 
@@ -136,12 +176,13 @@ def train_npa_wu_softmax(npa_model, criterion, optim, train_generator):
             break
     return metrics_epoch
 
+
 def main(config):
 
     # set device
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     print(device)
-    print_setting(config, ['random_seed', 'log_method', 'test_w_one'])
+    print_setting(config, ['random_seed', 'log_method', 'test_w_one', 'eval_method'])
 
     hyper_params = {'lr': None, 'neg_sample_ratio': None,
                     'batch_size': config.batch_size,
@@ -226,7 +267,10 @@ def main(config):
         #####################
         #
         #evaluate on test set
-        metrics_epoch, eval_msg = test_eval_like_npa_wu(npa_model, test_generator, one_candidate=config.test_w_one)
+        if config.eval_method == 'wu':
+            metrics_epoch, eval_msg = test_eval_like_npa_wu(npa_model, test_generator, one_candidate=config.test_w_one)
+        elif config.eval_method == 'softmax':
+            metrics_epoch, eval_msg = test_eval_npa_softmax(npa_model, test_generator)
         # logging
         t2 = time.time()
         metrics_test = log_metrics(epoch, metrics_epoch, metrics_test, writer, mode='test', method=config.log_method)
@@ -242,7 +286,7 @@ def main(config):
         if device.type == 'cpu':
             break
 
-    print("\n---------- Done in {0:.2f} min ----------".format((time.time()-t_train_start)/60))
+    print("\n---------- Done in {0:.2f} min ----------\n".format((time.time()-t_train_start)/60))
     #writer.add_figure()
     #write.add_hparams
     writer.close()
@@ -328,6 +372,7 @@ if __name__ == "__main__":
     parser.add_argument('--lr', type=float, default=0.001, help='Learning rate')
     parser.add_argument('--log_method', type=str, default='mean', help='Mode for logging the metrics: [mean, batches]')
     parser.add_argument('--test_w_one', type=bool, default=False, help='use only 1 candidate during testing')
+    parser.add_argument('--eval_method', type=str, default='wu', help='Mode for evaluating NPA model: [wu, softmax]')
 
     config = parser.parse_args()
 
