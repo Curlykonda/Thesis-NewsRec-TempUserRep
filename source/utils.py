@@ -1,3 +1,6 @@
+import json
+import pickle
+from pathlib import Path
 import sys
 sys.path.append("..")
 
@@ -47,7 +50,9 @@ def reverse_mapping_dict(item2idx):
     return {idx: item for item, idx in item2idx.items()}
 
 
-def print_setting(config, valid_keys):
+def print_setting(config, valid_keys=None):
+    if valid_keys == None:
+        valid_keys = vars(config).keys()
     for key, value in vars(config).items():
         if key in valid_keys:
             print("{0}: {1}".format(key, value))
@@ -82,3 +87,54 @@ def print_setting(config, valid_keys):
 #     results = checkpoint['results']
 #
 #     return dataset, results, step
+
+def create_exp_name(config, n_exp=0, time='12:00'):
+    exp_name = "exp" + str(n_exp) + config.log_method \
+               + '-' + config.eval_method \
+               + '-' + str(config.random_seed) \
+               + '-' + str(time)
+    return exp_name
+
+def save_metrics_as_pickle(metrics, res_path : Path, file_name : str):
+
+    with open(res_path / (file_name + '.pkl'), 'wb') as fout:
+        pickle.dump(metrics, fout, protocol=pickle.HIGHEST_PROTOCOL)
+    print("Metrics saved to {}\n".format((res_path / (file_name + '.pkl'))))
+
+def save_config_as_json(config, res_path : Path):
+
+    if not isinstance(config, dict):
+        config = {key: val for key, val in vars(config).items()}
+    with open(res_path / 'config.json', 'w') as fout:
+        json.dump(config, fout, sort_keys=True, indent=4)
+
+def save_exp_name_label(config, res_path : Path, exp_name : str):
+
+    #exp_name.json
+    # 'lbl_short' : wu-sin-42
+    # 'exp_name_long': exp_name
+
+    # Goal: read in json and extract exp label with key 'lbl_short'
+
+    exp_dict = {}
+
+    # relevant: eval_method, rnd_seed,
+    rel_config = {}
+    rel_config['eval_method'] = config.eval_method
+    if config.test_w_one:
+        rel_config['test'] = 'sin' # single candidate
+    else:
+        rel_config['test'] = 'mul' # multiple candidates
+    rel_config['seed'] = config.random_seed
+
+    exp_dict['lbl_short'] = "-".join(list(map(str, rel_config.values())))
+    exp_dict['exp_name_long'] = exp_name
+
+    with open(res_path / 'exp_name.json', 'w') as fout:
+        json.dump(exp_dict, fout, indent=4)
+
+def create_exp_lbl_short(rel_items : dict):
+
+    lbl = "-".join(list(map(str, rel_items.values())))
+
+    return lbl

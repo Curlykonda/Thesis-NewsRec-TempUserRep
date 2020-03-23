@@ -22,7 +22,7 @@ sys.path.append("..")
 from source.my_datasets import DPG_Dataset
 from source.models.NPA import NPA_wu, init_weights
 from source.utils_npa import get_dpg_data, get_embeddings_from_pretrained
-from source.utils import print_setting
+from source.utils import print_setting, save_metrics_as_pickle, save_config_as_json, create_exp_name, save_exp_name_label
 from source.metrics import *
 
 def try_var_loss_funcs(logits, targets, i_batch):
@@ -49,7 +49,6 @@ def try_var_loss_funcs(logits, targets, i_batch):
     print("NLL softm {0:.3f} \t log softm {0:.3f}".format(nll(softm_probs, targets.argmax(dim=1)), nll(log_softm_probs, targets.argmax(dim=1))))
 
 def test_eval_npa_softmax(model, test_generator):
-    metrics_epoch = []
 
     # difference: select a single cand-target pair + sigmoid activation
     metrics_epoch = []
@@ -89,7 +88,6 @@ def test_eval_npa_softmax(model, test_generator):
     return metrics_epoch, eval_str
 
 def test_eval_like_npa_wu(model, test_generator, one_candidate=True):
-    metrics_epoch = []
 
     # difference: select a single cand-target pair + sigmoid activation
     metrics_epoch = []
@@ -236,15 +234,9 @@ def main(config):
     except:
         n_exp = 1
 
-    #exp_name = create_exp_name(n_exp, now, config)
-    exp_name = 'exp' + str(n_exp) + config.log_method \
-               + '-' + config.eval_method\
-               + '-' + now.strftime("%H:%M")
-
+    exp_name = create_exp_name(config, n_exp, time=now.strftime("%H:%M"))
     res_path = res_path / exp_name
-
     res_path.mkdir(parents=True, exist_ok=True)
-
     writer = SummaryWriter(res_path) # logging
 
     metrics_train = defaultdict(list)
@@ -273,6 +265,9 @@ def main(config):
             metrics_epoch, eval_msg = test_eval_like_npa_wu(npa_model, test_generator, one_candidate=config.test_w_one)
         elif config.eval_method == 'softmax':
             metrics_epoch, eval_msg = test_eval_npa_softmax(npa_model, test_generator)
+        else:
+            raise KeyError("{} is no valid evluation method".format(config.eval_method))
+
         # logging
         t2 = time.time()
         metrics_test = log_metrics(epoch, metrics_epoch, metrics_test, writer, mode='test', method=config.log_method)
@@ -293,12 +288,12 @@ def main(config):
     #write.add_hparams
     writer.close()
 
-    #save metrics
+    #save metrics & config
     metrics = {key: (metrics_train[key], metrics_test[key]) for key in metrics_test.keys()}
+    save_metrics_as_pickle(metrics, res_path, file_name='metrics_' + config.log_method)
+    save_config_as_json(config, res_path)
+    save_exp_name_label(config, res_path, exp_name)
 
-    exp = "metrics_" + config.log_method + '.pkl'
-    with open(res_path / exp, 'wb') as fout:
-        pickle.dump(metrics, fout)
 
 def map_round_tensor(tensor, decimals=3, idx=0):
     if len(tensor.shape) > 1:
@@ -308,7 +303,7 @@ def map_round_tensor(tensor, decimals=3, idx=0):
     else:
         return list(map(lambda x: x.round(decimals), tensor[:idx].detach().cpu().numpy()))
 
-def log_metrics(epoch, metrics_epoch, metrics, writer, mode='train', method='mean'):
+def log_metrics(epoch, metrics_epoch, metrics, writer, mode='train', method='epoch'):
     loss, acc, auc, ap = (zip(*metrics_epoch))
     stats = {'loss': loss,
             'acc': acc,
@@ -317,7 +312,7 @@ def log_metrics(epoch, metrics_epoch, metrics, writer, mode='train', method='mea
     }
 
     for key, val in stats.items():
-        if method == 'mean':
+        if method == 'epoch':
             metrics[key].append(np.mean(val))
             writer.add_scalar(key + '/' + mode, np.mean(val), epoch)
             writer.add_scalar(key + '-var/' + mode, np.var(val), epoch)
@@ -373,8 +368,8 @@ if __name__ == "__main__":
     parser.add_argument('--batch_size', type=int, default=100, help='batch size for training')
     parser.add_argument('--n_epochs', type=int, default=10, help='Epoch number for training')
     parser.add_argument('--lr', type=float, default=0.001, help='Learning rate')
-    parser.add_argument('--log_method', type=str, default='mean', help='Mode for logging the metrics: [mean, batches]')
-    parser.add_argument('--test_w_one', type=bool, default=False, help='use only 1 candidate during testing')
+    parser.add_argument('--log_method', type=str, default='epoch', help='Mode for logging the metrics: [epoch, batches]')
+    parser.add_argument('--test_w_one', type=bool, default=True, help='use only 1 candidate during testing')
     parser.add_argument('--eval_method', type=str, default='wu', help='Mode for evaluating NPA model: [wu, softmax]')
 
     config = parser.parse_args()
