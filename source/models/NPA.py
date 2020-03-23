@@ -169,6 +169,8 @@ class CNN_wu(nn.Module):
         self.dim_pref_q = dim_pref_q
         self.word_emb_dim = word_emb_dim
 
+        self.dropout_in = nn.Dropout(p=dropout_p)
+
         self.cnn_encoder = nn.Sequential(nn.Conv1d(1, n_filters, kernel_size=(kernel_size, word_emb_dim), padding=(kernel_size - 2, 0)),
                         nn.ReLU(),
                         nn.Dropout(p=dropout_p)
@@ -178,8 +180,8 @@ class CNN_wu(nn.Module):
 
     def forward(self, embedded_news, pref_query):
         contextual_rep = []
-    # embedded_news.shape = batch_size X max_hist_len X max_title_len X word_emb_dim
-
+        # embedded_news.shape = batch_size X max_hist_len X max_title_len X word_emb_dim
+        embedded_news = self.dropout_in(embedded_news)
         # encode each browsed news article and concatenate
         for n_news in range(embedded_news.shape[1]):
 
