@@ -221,7 +221,7 @@ def main(config):
     #
     #optim & loss
     criterion = nn.BCELoss() # raw_scores (logits) -> Softmax -> BCE loss
-    optim = torch.optim.Adam(npa_model.parameters(), lr=0.001)
+    optim = torch.optim.Adam(npa_model.parameters(), lr=config.lr)
 
     # create dir for logging
     now = datetime.now()
@@ -371,6 +371,10 @@ if __name__ == "__main__":
     parser.add_argument('--log_method', type=str, default='epoch', help='Mode for logging the metrics: [epoch, batches]')
     parser.add_argument('--test_w_one', type=bool, default=True, help='use only 1 candidate during testing')
     parser.add_argument('--eval_method', type=str, default='wu', help='Mode for evaluating NPA model: [wu, softmax]')
+
+    #logging
+    parser.add_argument('--exp_name', type=str, default=None,
+                        help='Addition to experiment name for logging, e.g. size of dataset [small, large]')
 
     config = parser.parse_args()
 

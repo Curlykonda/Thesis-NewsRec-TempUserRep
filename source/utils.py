@@ -88,11 +88,20 @@ def print_setting(config, valid_keys=None):
 #
 #     return dataset, results, step
 
-def create_exp_name(config, n_exp=0, time='12:00'):
-    exp_name = "exp" + str(n_exp) + config.log_method \
-               + '-' + config.eval_method \
-               + '-' + str(config.random_seed) \
-               + '-' + str(time)
+def create_exp_name(config, n_exp=0, time='12:00', seperator='-'):
+
+    sep = seperator #
+
+    exp_name = "exp" + str(n_exp)
+
+    if config.exp_name is not None:
+        exp_name += str(config.exp_name)
+        exp_name += sep
+
+    exp_name = config.log_method \
+               + sep + config.eval_method \
+               + sep + str(config.random_seed) \
+               + sep + str(time)
     return exp_name
 
 def save_metrics_as_pickle(metrics, res_path : Path, file_name : str):
