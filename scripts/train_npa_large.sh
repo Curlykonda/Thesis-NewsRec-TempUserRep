@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --job-name=train_npa_large
-#SBATCH -n 4
-#SBATCH -t 01:00:00
+#SBATCH -n 8
+#SBATCH -t 02:00:00
 #SBATCH -p gpu_shared
 #SBATCH --gres=gpu:1
 #SBATCH --mem=60000M
