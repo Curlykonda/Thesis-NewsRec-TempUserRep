@@ -34,7 +34,20 @@ def sample_n_from_elements(elements, ratio):
         return random.sample(elements, ratio)
 
 def prep_dpg_user_file(user_file, article_ids, art_id2idx, neg_sample_ratio=4, max_hist_len=50):
+    '''
+    Given a subsample of users and the valid articles, we truncate and encode users' reading history with article indices.
+    Construct the data input for the Wu NPA as follows:
+     'input': (u_id, history, candidates), 'labels': lbls
 
+    Apply negative sampling to produce 'candidate' list of positive and negative elements
+
+    :param user_file: (str) path pointing to pickled subsample of user data
+    :param article_ids: list containing all valid article ids
+    :param art_id2idx: (dict) mapping from article id to index
+    :param neg_sample_ratio: int ratio for number of negative samples
+    :param max_hist_len: (int) maximum length of a user's history, for truncating
+    :return:
+    '''
     with open(user_file, "rb") as fin:
         user_data = pickle.load(fin)
 

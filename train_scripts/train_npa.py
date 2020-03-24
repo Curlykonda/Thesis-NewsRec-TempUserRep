@@ -169,7 +169,7 @@ def train_npa_wu_softmax(npa_model, criterion, optim, train_generator):
                               roc_auc_score(lbl_cpu, y_probs_cpu),  # TPR v. FPR with varying threshold
                               average_precision_score(lbl_cpu, y_probs_cpu)))  # \text{AP} = \sum_n (R_n - R_{n-1}) P_n
 
-        if device.type == 'cpu' and i_batch > 0:
+        if device.type == 'cpu': #and i_batch > 0
             print("Stopped after {} batches".format(i_batch + 1))
             break
     return metrics_epoch
@@ -191,6 +191,7 @@ def main(config):
     torch.cuda.manual_seed(config.random_seed)
     np.random.seed(config.random_seed)
 
+    # Get & prepare data
     # data is indexed by user_ids
     dataset, vocab, news_as_word_ids, art_id2idx, u_id2idx = get_dpg_data(config.data_path, config.neg_sample_ratio,
                                                                           config.max_hist_len, config.max_news_len, load_prepped=True)
@@ -340,8 +341,8 @@ if __name__ == "__main__":
     # input data
     parser.add_argument('--data_type', type=str, default='DPG',
                         help='options for data format: DPG, NPA or Adressa ')
-    parser.add_argument('--data_path', type=str, default='../datasets/dpg/i10k_u5k_s30/',
-                        help='path to data directory')
+    parser.add_argument('--data_path', type=str, default='../datasets/dpg/i100k_u50k_s30/',
+                        help='path to data directory') # dev : i10k_u5k_s30/
 
     parser.add_argument('--article_ids', type=str, default='../datasets/dpg/i10k_u5k_s30/item_ids.pkl',
                         help='path to directory with item id pickle file')
@@ -351,8 +352,6 @@ if __name__ == "__main__":
                         help='path to user data pickle file')
     parser.add_argument('--word_emb_path', type=str, default='../embeddings/glove_eng.840B.300d.txt',
                         help='path to directory with word embeddings')
-
-    parser.add_argument('--results_path', type=str, default='../results/', help='path to save metrics')
 
     # preprocessing
     parser.add_argument('--max_hist_len', type=int, default=50,
@@ -373,6 +372,7 @@ if __name__ == "__main__":
     parser.add_argument('--eval_method', type=str, default='wu', help='Mode for evaluating NPA model: [wu, softmax]')
 
     #logging
+    parser.add_argument('--results_path', type=str, default='../results/', help='path to save metrics')
     parser.add_argument('--exp_name', type=str, default=None,
                         help='Addition to experiment name for logging, e.g. size of dataset [small, large]')
 
