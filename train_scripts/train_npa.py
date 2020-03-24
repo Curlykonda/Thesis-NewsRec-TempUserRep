@@ -224,9 +224,9 @@ def main(config):
     criterion = nn.BCELoss() # raw_scores (logits) -> Softmax -> BCE loss
     if config.eval_method == 'wu':
         #optim = torch.optim.Adam(npa_model.parameters(), lr=config.lr)
-        optim = torch.optim.Adam(npa_model.parameters(), lr=config.lr, weight_decay=0.9)
+        optim = torch.optim.Adam(npa_model.parameters(), lr=config.lr, weight_decay=1e-3)
     else:
-        optim = torch.optim.Adam(npa_model.parameters(), lr=config.lr, weight_decay=0.9)
+        optim = torch.optim.Adam(npa_model.parameters(), lr=config.lr, weight_decay=1e-3)
     #Adam(params, lr=0.001, betas=(0.9, 0.999), eps=1e-08, weight_decay=0, amsgrad=False) default
 
     # create dir for logging
