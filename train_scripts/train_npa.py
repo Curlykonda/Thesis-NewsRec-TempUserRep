@@ -222,7 +222,12 @@ def main(config):
     #
     #optim & loss
     criterion = nn.BCELoss() # raw_scores (logits) -> Softmax -> BCE loss
-    optim = torch.optim.Adam(npa_model.parameters(), lr=config.lr)
+    if config.eval_method == 'wu':
+        #optim = torch.optim.Adam(npa_model.parameters(), lr=config.lr)
+        optim = torch.optim.Adam(npa_model.parameters(), lr=config.lr, weight_decay=0.9)
+    else:
+        optim = torch.optim.Adam(npa_model.parameters(), lr=config.lr, weight_decay=0.9)
+    #Adam(params, lr=0.001, betas=(0.9, 0.999), eps=1e-08, weight_decay=0, amsgrad=False) default
 
     # create dir for logging
     now = datetime.now()
@@ -341,15 +346,9 @@ if __name__ == "__main__":
     # input data
     parser.add_argument('--data_type', type=str, default='DPG',
                         help='options for data format: DPG, NPA or Adressa ')
-    parser.add_argument('--data_path', type=str, default='../datasets/dpg/i100k_u50k_s30/',
+    parser.add_argument('--data_path', type=str, default='../datasets/dpg/dev/',
                         help='path to data directory') # dev : i10k_u5k_s30/
 
-    parser.add_argument('--article_ids', type=str, default='../datasets/dpg/i10k_u5k_s30/item_ids.pkl',
-                        help='path to directory with item id pickle file')
-    parser.add_argument('--article_data', type=str, default='../datasets/dpg/i10k_u5k_s30/news_data.pkl',
-                        help='path to article data pickle file')
-    parser.add_argument('--user_data', type=str, default='../datasets/dpg/i10k_u5k_s30/user_data.pkl',
-                        help='path to user data pickle file')
     parser.add_argument('--word_emb_path', type=str, default='../embeddings/glove_eng.840B.300d.txt',
                         help='path to directory with word embeddings')
 
@@ -366,10 +365,13 @@ if __name__ == "__main__":
     parser.add_argument('--bce_logits', type=int, default=0, help='use BCE with logits')
     parser.add_argument('--batch_size', type=int, default=100, help='batch size for training')
     parser.add_argument('--n_epochs', type=int, default=10, help='Epoch number for training')
-    parser.add_argument('--lr', type=float, default=0.001, help='Learning rate')
     parser.add_argument('--log_method', type=str, default='epoch', help='Mode for logging the metrics: [epoch, batches]')
     parser.add_argument('--test_w_one', type=bool, default=True, help='use only 1 candidate during testing')
     parser.add_argument('--eval_method', type=str, default='wu', help='Mode for evaluating NPA model: [wu, softmax]')
+
+    # optimiser
+    parser.add_argument('--lr', type=float, default=0.001, help='Learning rate')
+    parser.add_argument('--weight_decay', type=float, default=0.0, help='weight decay as regularisation option')
 
     #logging
     parser.add_argument('--results_path', type=str, default='../results/', help='path to save metrics')
