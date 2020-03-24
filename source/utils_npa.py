@@ -268,30 +268,34 @@ def get_labels_from_data(data):
 def get_dpg_data(data_path, neg_sample_ratio=4, max_hist_len=50, max_article_len=30, min_counts_for_vocab=2, load_prepped=False):
 
     if load_prepped:
-        with open(data_path + "news_prepped.pkl", 'rb') as fin:
-            (vocab, news_as_word_ids, art_id2idx) = pickle.load(fin)
+        try:
+            with open(data_path + "news_prepped.pkl", 'rb') as fin:
+                (vocab, news_as_word_ids, art_id2idx) = pickle.load(fin)
 
-        with open(data_path + "data_prepped.pkl", 'rb') as fin:
-            u_id2idx, data = pickle.load(fin)
-    else:
+            with open(data_path + "data_prepped.pkl", 'rb') as fin:
+                u_id2idx, data = pickle.load(fin)
 
-        path_article_data = data_path + "news_data.pkl"
+            return data, vocab, news_as_word_ids, art_id2idx, u_id2idx
+        except:
+            print("Could not load preprocessed files! Continuing to do preprocessing now..")
 
-        vocab, news_as_word_ids, art_id2idx = preprocess_dpg_news_file(news_file=path_article_data,
-                                                                       tokenizer=word_tokenize,
-                                                                       min_counts_for_vocab=min_counts_for_vocab,
-                                                                       max_article_len=max_article_len)
+    path_article_data = data_path + "news_data.pkl"
 
-        with open(data_path + "news_prepped.pkl", 'wb') as fout:
-            pickle.dump((vocab, news_as_word_ids, art_id2idx), fout)
+    vocab, news_as_word_ids, art_id2idx = preprocess_dpg_news_file(news_file=path_article_data,
+                                                                   tokenizer=word_tokenize,
+                                                                   min_counts_for_vocab=min_counts_for_vocab,
+                                                                   max_article_len=max_article_len)
 
-        path_user_data = data_path + "user_data.pkl"
+    with open(data_path + "news_prepped.pkl", 'wb') as fout:
+        pickle.dump((vocab, news_as_word_ids, art_id2idx), fout)
 
-        u_id2idx, data = prep_dpg_user_file(path_user_data, set(art_id2idx.keys()), art_id2idx,
-                                            neg_sample_ratio=neg_sample_ratio, max_hist_len=max_hist_len)
+    path_user_data = data_path + "user_data.pkl"
 
-        with open(data_path + "data_prepped.pkl", 'wb') as fout:
-            pickle.dump((u_id2idx, data), fout)
+    u_id2idx, data = prep_dpg_user_file(path_user_data, set(art_id2idx.keys()), art_id2idx,
+                                        neg_sample_ratio=neg_sample_ratio, max_hist_len=max_hist_len)
+
+    with open(data_path + "data_prepped.pkl", 'wb') as fout:
+        pickle.dump((u_id2idx, data), fout)
 
     return data, vocab, news_as_word_ids, art_id2idx, u_id2idx
 
