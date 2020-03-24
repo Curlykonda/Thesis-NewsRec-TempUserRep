@@ -270,6 +270,9 @@ def get_dpg_data(data_path, neg_sample_ratio=4, max_hist_len=50, max_article_len
     if load_prepped:
         with open(data_path + "news_prepped.pkl", 'rb') as fin:
             (vocab, news_as_word_ids, art_id2idx) = pickle.load(fin)
+
+        with open(data_path + "data_prepped.pkl", 'rb') as fin:
+            u_id2idx, data = pickle.load(fin)
     else:
 
         path_article_data = data_path + "news_data.pkl"
@@ -282,10 +285,13 @@ def get_dpg_data(data_path, neg_sample_ratio=4, max_hist_len=50, max_article_len
         with open(data_path + "news_prepped.pkl", 'wb') as fout:
             pickle.dump((vocab, news_as_word_ids, art_id2idx), fout)
 
-    path_user_data = data_path + "user_data.pkl"
+        path_user_data = data_path + "user_data.pkl"
 
-    u_id2idx, data = prep_dpg_user_file(path_user_data, set(art_id2idx.keys()), art_id2idx,
-                                        neg_sample_ratio=neg_sample_ratio, max_hist_len=max_hist_len)
+        u_id2idx, data = prep_dpg_user_file(path_user_data, set(art_id2idx.keys()), art_id2idx,
+                                            neg_sample_ratio=neg_sample_ratio, max_hist_len=max_hist_len)
+
+        with open(data_path + "data_prepped.pkl", 'wb') as fout:
+            pickle.dump((u_id2idx, data), fout)
 
     return data, vocab, news_as_word_ids, art_id2idx, u_id2idx
 
