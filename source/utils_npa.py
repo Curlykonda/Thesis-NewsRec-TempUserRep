@@ -277,7 +277,7 @@ def get_dpg_data(data_path, neg_sample_ratio=4, max_hist_len=50, max_article_len
 
             return data, vocab, news_as_word_ids, art_id2idx, u_id2idx
         except:
-            print("Could not load preprocessed files! Continuing to do preprocessing now..")
+            print("Could not load preprocessed files! Continuing preprocessing now..")
 
     path_article_data = data_path + "news_data.pkl"
 
