@@ -98,7 +98,7 @@ def create_exp_name(config, n_exp=0, time='12:00', seperator='-'):
         exp_name += str(config.exp_name)
         exp_name += sep
 
-    exp_name = config.log_method \
+    exp_name += config.log_method \
                + sep + config.eval_method \
                + sep + str(config.random_seed) \
                + sep + str(time)
