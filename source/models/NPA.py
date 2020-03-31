@@ -63,7 +63,7 @@ class NPA_wu(nn.Module):
 
         if pretrained_emb is not None:
             #assert pretrained_emb.shape == [vocab_len, emb_dim_words]
-            print("Emb shape is {} and should {}".format(pretrained_emb.shape, (vocab_len, emb_dim_words)))
+            #print("Emb shape is {} and should {}".format(pretrained_emb.shape, (vocab_len, emb_dim_words)))
             self.word_embeddings = nn.Embedding.from_pretrained(torch.FloatTensor(pretrained_emb), freeze=False, padding_idx=0)      # word embeddings
         else:
             self.word_embeddings = nn.Embedding(vocab_len, emb_dim_words)
@@ -82,11 +82,9 @@ class NPA_wu(nn.Module):
 
     def forward(self, user_id, brows_hist_as_ids, candidates_as_ids):
 
-        print("hist")
         brows_hist_reps = self.encode_news(user_id, brows_hist_as_ids) # encode browsing history
         self.brows_hist_reps = brows_hist_reps
 
-        print("cands")
         candidate_reps = self.encode_news(user_id, candidates_as_ids) # encode candidate articles
         self.candidate_reps = candidate_reps
 
@@ -190,14 +188,11 @@ class CNN_wu(nn.Module):
             # concatenate words
             article_one = embedded_news[:, n_news, :, :].squeeze(1) # shape = (batch_size, title_len, emb_dim)
 
-            if n_news == 0:
-                print(article_one.shape)
+            # if n_news == 0:
+            #     print(article_one.shape)
 
             encoded_news = self.cnn_encoder(article_one.unsqueeze(1))
             # encoded_news.shape = batch_size X n_cnn_filters X max_title_len
-
-            if n_news == 0:
-                print(encoded_news.shape)
 
             #pers attn
             contextual_rep.append(self.pers_attn_word(encoded_news.squeeze(-1), pref_query))
