@@ -200,7 +200,7 @@ class CNN_wu(nn.Module):
                 print(encoded_news.shape)
 
             #pers attn
-            contextual_rep.append(self.pers_attn_word(encoded_news.squeeze(), pref_query))
+            contextual_rep.append(self.pers_attn_word(encoded_news.squeeze(-1), pref_query))
 
             assert contextual_rep[-1].shape[1] == self.n_filters # batch_size X n_cnn_filters
 
@@ -235,12 +235,12 @@ class PersonalisedAttention(nn.Module):
 
         pref_q = self.proj_pref_q(pref_q) # transform pref query
 
-        attn_a = torch.bmm(torch.transpose(enc_input, 1, 2), pref_q.unsqueeze(2)).squeeze() # dot product over batch http://pytorch.org/docs/0.2.0/torch.html#torch.bmm
+        attn_a = torch.bmm(torch.transpose(enc_input, 1, 2), pref_q.unsqueeze(2)).squeeze(-1) # dot product over batch http://pytorch.org/docs/0.2.0/torch.html#torch.bmm
         attn_weights = F.softmax(attn_a, dim=-1)
 
         self.attn_weights = attn_weights
         #assert torch.sum(attn_weights, dim=1) == torch.ones(attn_weights.shape[0], dtype=float) # (normalised) attn weights should sum to 1
 
-        attn_w_rep = torch.matmul(enc_input, attn_weights.unsqueeze(2)).squeeze() # attn-weighted representation r of i-th news
+        attn_w_rep = torch.matmul(enc_input, attn_weights.unsqueeze(2)).squeeze(-1) # attn-weighted representation r of i-th news
 
         return attn_w_rep
