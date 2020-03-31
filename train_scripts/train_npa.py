@@ -124,6 +124,8 @@ def test_eval_like_npa_wu(model, test_generator, act_func="sigmoid", one_candida
             # forward pass
             logits = model(user_ids.long().to(device), brows_hist.long().to(device),
                                candidates.long().to(device))
+            if len(logits.shape) < 2:  # cover border cases for batch size = 1
+                logits = logits.unsqueeze(0)
 
             if act_func == "sigmoid":
                 y_probs = torch.sigmoid(logits)
@@ -137,19 +139,23 @@ def test_eval_like_npa_wu(model, test_generator, act_func="sigmoid", one_candida
             # aggregate predictions per user because each user can have various test samples
             for idx, u_id in enumerate(user_ids):
                 u_id = u_id.item()
+
+                preds = y_probs[idx].detach().cpu().numpy().tolist()
+                targets = lbls[idx].cpu().numpy().tolist()
                 if u_id not in click_scores:
                     click_scores[u_id] = []
-                    click_scores[u_id].append(y_probs[idx].detach().cpu().numpy().tolist())
-                    click_scores[u_id].append(lbls[idx].cpu().numpy().tolist())
+                    click_scores[u_id].append(preds)
+                    click_scores[u_id].append(targets)
                 else:
-                    click_scores[u_id][0].extend(y_probs[idx].detach().cpu().numpy().tolist())
-                    click_scores[u_id][1].extend(lbls[idx].cpu().numpy().tolist())
+                    click_scores[u_id][0].extend(preds)
+                    click_scores[u_id][1].extend(targets)
 
             loss_epoch.append(test_loss.item())
             acc.append(compute_acc_tensors(y_probs, lbls))
             # precision, recall, thresholds = precision_recall_curve(y_true, y_scores)
             if device.type == 'cpu':
-                break
+                #break
+                pass
 
     metrics_epoch.append(
         (
@@ -160,7 +166,7 @@ def test_eval_like_npa_wu(model, test_generator, act_func="sigmoid", one_candida
         )
             )
 
-    idx = 5
+    idx = min(5, lbls.shape[0]-1)
     if one_candidate:
         tgts = lbls[:idx].cpu().numpy().tolist()
     else:
@@ -372,7 +378,8 @@ def log_metrics(epoch, metrics_epoch, metrics, writer, mode='train', method='epo
             'auc': auc,
             'ap': ap
     }
-
+    #TODO: add histogram of logits for each epoch to observe (learning) behaviour
+    # -> expect that logits widely distributed in the beginning but more concentrated around certain high & low points
     for key, val in stats.items():
         if method == 'epoch':
             metrics[key].append(np.mean(val))
