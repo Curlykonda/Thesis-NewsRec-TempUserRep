@@ -82,9 +82,11 @@ class NPA_wu(nn.Module):
 
     def forward(self, user_id, brows_hist_as_ids, candidates_as_ids):
 
+        print("hist")
         brows_hist_reps = self.encode_news(user_id, brows_hist_as_ids) # encode browsing history
         self.brows_hist_reps = brows_hist_reps
 
+        print("cands")
         candidate_reps = self.encode_news(user_id, candidates_as_ids) # encode candidate articles
         self.candidate_reps = candidate_reps
 
@@ -188,10 +190,13 @@ class CNN_wu(nn.Module):
             # concatenate words
             article_one = embedded_news[:, n_news, :, :].squeeze() # shape = (batch_size, title_len, emb_dim)
 
-            encoded_news = self.cnn_encoder(article_one.unsqueeze(1))
-            # encoded_news.shape = batch_size X n_cnn_filters X max_title_len
             if n_news == 0:
                 print(article_one.shape)
+
+            encoded_news = self.cnn_encoder(article_one.unsqueeze(1))
+            # encoded_news.shape = batch_size X n_cnn_filters X max_title_len
+
+            if n_news == 0:
                 print(encoded_news.shape)
 
             #pers attn
