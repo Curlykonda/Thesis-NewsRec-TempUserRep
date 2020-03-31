@@ -188,7 +188,7 @@ class CNN_wu(nn.Module):
         for n_news in range(embedded_news.shape[1]):
 
             # concatenate words
-            article_one = embedded_news[:, n_news, :, :].squeeze() # shape = (batch_size, title_len, emb_dim)
+            article_one = embedded_news[:, n_news, :, :].squeeze(1) # shape = (batch_size, title_len, emb_dim)
 
             if n_news == 0:
                 print(article_one.shape)
