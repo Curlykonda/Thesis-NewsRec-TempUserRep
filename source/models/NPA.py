@@ -82,15 +82,15 @@ class NPA_wu(nn.Module):
 
     def forward(self, user_id, brows_hist_as_ids, candidates_as_ids):
 
-        brows_hist_reps = self.encode_news(user_id, brows_hist_as_ids)
+        brows_hist_reps = self.encode_news(user_id, brows_hist_as_ids) # encode browsing history
         self.brows_hist_reps = brows_hist_reps
 
-        candidate_reps = self.encode_news(user_id, candidates_as_ids)
+        candidate_reps = self.encode_news(user_id, candidates_as_ids) # encode candidate articles
         self.candidate_reps = candidate_reps
 
-        user_rep = self.create_user_rep(user_id, brows_hist_reps)
+        user_rep = self.create_user_rep(user_id, brows_hist_reps) # create user representation
 
-        click_scores = self.click_predictor(user_rep, candidate_reps)
+        click_scores = self.click_predictor(user_rep, candidate_reps) # compute raw click score
         self.click_scores = click_scores
 
         #self.get_representation_shapes()
@@ -197,6 +197,14 @@ class CNN_wu(nn.Module):
             assert contextual_rep[-1].shape[1] == self.n_filters # batch_size X n_cnn_filters
 
         return torch.stack(contextual_rep, axis=2) # batch_s X dim_news_rep X history_len
+
+class NewsEncoderWu(nn.Module):
+    def __init__(self):
+        pass
+
+
+    def forward(self, *input, **kwargs):
+        pass
 
 
 class PersonalisedAttention(nn.Module):
