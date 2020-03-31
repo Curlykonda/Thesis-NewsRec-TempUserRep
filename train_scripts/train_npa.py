@@ -21,7 +21,7 @@ sys.path.append("..")
 
 from source.my_datasets import DPG_Dataset
 from source.models.NPA import NPA_wu, init_weights
-from source.utils_npa import get_dpg_data, get_embeddings_from_pretrained
+from source.utils_npa import get_dpg_data_processed, get_embeddings_from_pretrained
 from source.utils import print_setting, save_metrics_as_pickle, save_config_as_json, create_exp_name, save_exp_name_label
 from source.metrics import *
 
@@ -106,6 +106,10 @@ def test_eval_like_npa_wu(model, test_generator, act_func="sigmoid", one_candida
     model.eval()
     device = torch.device(model.device)
 
+    click_scores = defaultdict(list)
+    loss_epoch = []
+    acc = []
+
     with torch.no_grad():
         for sample in test_generator:
             user_ids, brows_hist, candidates = sample['input']
@@ -127,23 +131,40 @@ def test_eval_like_npa_wu(model, test_generator, act_func="sigmoid", one_candida
             y_probs_cpu = y_probs.detach().cpu()
 
             # compute loss
-            test_loss = nn.BCEWithLogitsLoss()(logits, lbls)
+            test_loss = nn.BCELoss()(y_probs, lbls)
+            #
+            # aggregate predictions per user because each user can have various test samples
+            for idx, u_id in enumerate(user_ids):
+                u_id = u_id.item()
+                if u_id not in click_scores:
+                    click_scores[u_id] = []
+                    click_scores[u_id].append(y_probs[idx].detach().cpu().numpy().tolist())
+                    click_scores[u_id].append(lbls[idx].cpu().numpy().tolist())
+                else:
+                    click_scores[u_id][0].extend(y_probs[idx].detach().cpu().numpy().tolist())
+                    click_scores[u_id][1].extend(lbls[idx].cpu().numpy().tolist())
 
-            metrics_epoch.append((test_loss.item(),
-                                  compute_acc_tensors(y_probs_cpu, lbls.cpu()),
-                                  roc_auc_score(lbls.cpu(), y_probs_cpu),
-                                  average_precision_score(lbls.cpu(), y_probs_cpu)))
-
+            loss_epoch.append(test_loss.item())
+            acc.append(compute_acc_tensors(y_probs, lbls))
             # precision, recall, thresholds = precision_recall_curve(y_true, y_scores)
-
             if device.type == 'cpu':
                 break
+
+    metrics_epoch.append(
+        (
+        np.mean(loss_epoch),
+        np.mean(acc),
+        np.mean([roc_auc_score(click_scores[u_id][1], click_scores[u_id][0]) for u_id in click_scores]),
+        np.mean([average_precision_score(click_scores[u_id][1], click_scores[u_id][0]) for u_id in click_scores])
+        )
+            )
+
     idx = 5
     if one_candidate:
         tgts = lbls[:idx].cpu().numpy().tolist()
     else:
         tgts = lbls[idx].cpu().numpy().tolist()
-    eval_str = ("\nLogits {} \nSigm p {} \nTargets {}".format(
+    eval_str = ("\nLogits {} \nProbs {} \nTargets {}".format(
         map_round_tensor(logits, idx=idx), map_round_tensor(y_probs, idx=idx), tgts))
 
     return metrics_epoch, eval_str
@@ -222,27 +243,32 @@ def main(config):
 
     # Get & prepare data
     # data is indexed by user_ids
-    dataset, vocab, news_as_word_ids, art_id2idx, u_id2idx = get_dpg_data(config.data_path, config.neg_sample_ratio,
-                                                                          config.max_hist_len, config.max_news_len, load_prepped=True)
+    dataset, vocab, news_as_word_ids, art_id2idx, u_id2idx = get_dpg_data_processed(config.data_path, config.neg_sample_ratio,
+                                                                                    config.max_hist_len, config.max_news_len, load_prepped=True)
     word_embeddings = get_embeddings_from_pretrained(vocab, emb_path=config.word_emb_path)
 
-    train_data, test_data = train_test_split(dataset, test_size=0.2, shuffle=True, random_state=config.random_seed)
+    train_data = dataset['train']
+    test_data = dataset['test']
+
+    # if use_val_set:
+    #     train_data, val_data = train_test_split(train_data, test_size=0.1, shuffle=True, random_state=config.random_seed)
 
     train_dataset = DPG_Dataset(train_data, news_as_word_ids)
-    train_generator = DataLoader(train_dataset, config.batch_size)
+    train_generator = DataLoader(train_dataset, config.batch_size, shuffle=True)
 
     test_dataset = DPG_Dataset(test_data, news_as_word_ids)
-    test_generator = DataLoader(test_dataset, config.batch_size)
+    test_generator = DataLoader(test_dataset, config.batch_size, shuffle=False)
+
     print("Train on {} samples".format(train_dataset.__len__()))
     #
     # build model
     #
-    model_params = {'n_users': len(dataset), 'vocab_len': len(vocab),
+    model_params = {'n_users': len(dataset['train'])+len(dataset['test']), 'vocab_len': len(vocab),
                     'dim_user_id': 50, 'dim_pref_query': 200, 'dim_words': 300,
                     'max_title_len': config.max_hist_len, 'device': device}
 
 
-    npa_model = NPA_wu(n_users=len(dataset), vocab_len=len(vocab), pretrained_emb=word_embeddings,
+    npa_model = NPA_wu(n_users=len(dataset['train'])+len(dataset['test']), vocab_len=len(vocab), pretrained_emb=word_embeddings,
                        emb_dim_user_id=50, emb_dim_pref_query=200, emb_dim_words=300,
                        max_news_len=config.max_news_len, device=device)
     npa_model.to(device)
@@ -291,8 +317,6 @@ def main(config):
         npa_model.train()
 
         metrics_epoch = train_npa_wu_softmax(npa_model, criterion, optim, train_generator, act_func=config.train_act_func)
-
-        #loss, acc, auc = zip(*metrics)
         t1 = time.time()
         metrics_train = log_metrics(epoch, metrics_epoch, metrics_train, writer, method=config.log_method)
         #
@@ -341,6 +365,7 @@ def map_round_tensor(tensor, decimals=3, idx=0):
 
 def log_metrics(epoch, metrics_epoch, metrics, writer, mode='train', method='epoch'):
     loss, acc, auc, ap = (zip(*metrics_epoch))
+
     stats = {'loss': loss,
             'acc': acc,
             'auc': auc,
@@ -350,10 +375,10 @@ def log_metrics(epoch, metrics_epoch, metrics, writer, mode='train', method='epo
     for key, val in stats.items():
         if method == 'epoch':
             metrics[key].append(np.mean(val))
-            writer.add_scalar(key + '/' + mode, np.mean(val), epoch)
-            writer.add_scalar(key + '-var/' + mode, np.var(val), epoch)
+            writer.add_scalar(key + '/' + mode, np.mean(val), global_step=epoch)
+            writer.add_scalar(key + '-var/' + mode, np.var(val), global_step=epoch)
 
-        elif method == 'batches':
+        elif method == 'batches' and mode != 'test':
             for v in val:
                 writer.add_scalar(key + '/' + mode, v, len(metrics[key]))
                 writer.add_scalar(key + '-var/' + mode, v, len(metrics[key]))
@@ -362,7 +387,7 @@ def log_metrics(epoch, metrics_epoch, metrics, writer, mode='train', method='epo
 
         else:
             raise NotImplementedError()
-
+    writer.close()
     return metrics
 
 
@@ -376,7 +401,7 @@ if __name__ == "__main__":
     # input data
     parser.add_argument('--data_type', type=str, default='DPG',
                         help='options for data format: DPG, NPA or Adressa ')
-    parser.add_argument('--data_path', type=str, default='../datasets/dpg/dev/',
+    parser.add_argument('--data_path', type=str, default='../datasets/dpg/dev_time_split/',
                         help='path to data directory') # dev : i10k_u5k_s30/
 
     parser.add_argument('--word_emb_path', type=str, default='../embeddings/glove_eng.840B.300d.txt',
