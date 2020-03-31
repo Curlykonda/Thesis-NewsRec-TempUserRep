@@ -417,12 +417,11 @@ if __name__ == "__main__":
                         help='Negative sample ratio N: for each positive impression generate N negative samples')
 
     #training
-    parser.add_argument('--bce_logits', type=int, default=0, help='use BCE with logits')
     parser.add_argument('--batch_size', type=int, default=100, help='batch size for training')
     parser.add_argument('--n_epochs', type=int, default=10, help='Epoch number for training')
     parser.add_argument('--log_method', type=str, default='epoch', help='Mode for logging the metrics: [epoch, batches]')
     parser.add_argument('--test_w_one', type=bool, default=False, help='use only 1 candidate during testing')
-    parser.add_argument('--eval_method', type=str, default='wu', help='Mode for evaluating NPA model: [wu, placeholder]')
+    parser.add_argument('--eval_method', type=str, default='wu', help='Mode for evaluating NPA model: [wu, custom]')
     parser.add_argument('--train_act_func', type=str, default='softmax', help='Output activation func Training: [softmax, sigmoid]')
     parser.add_argument('--test_act_func', type=str, default='sigmoid', help='Output activation func Testing: [softmax, sigmoid]')
 
