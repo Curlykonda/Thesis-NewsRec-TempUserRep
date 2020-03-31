@@ -105,6 +105,7 @@ def test_eval_like_npa_wu(model, test_generator, act_func="sigmoid", one_candida
     metrics_epoch = []
     model.eval()
     device = torch.device(model.device)
+    print("test")
 
     click_scores = defaultdict(list)
     loss_epoch = []
@@ -267,7 +268,6 @@ def main(config):
                     'dim_user_id': 50, 'dim_pref_query': 200, 'dim_words': 300,
                     'max_title_len': config.max_hist_len, 'device': device}
 
-
     npa_model = NPA_wu(n_users=len(dataset['train'])+len(dataset['test']), vocab_len=len(vocab), pretrained_emb=word_embeddings,
                        emb_dim_user_id=50, emb_dim_pref_query=200, emb_dim_words=300,
                        max_news_len=config.max_news_len, device=device)
@@ -320,11 +320,12 @@ def main(config):
         t1 = time.time()
         metrics_train = log_metrics(epoch, metrics_epoch, metrics_train, writer, method=config.log_method)
         #
-        #####################
-        #
+        ##########################################################################################
         #evaluate on test set
+        ###############################
         #if config.eval_method == 'wu':
-        metrics_epoch, eval_msg = test_eval_like_npa_wu(npa_model, test_generator, act_func=config.test_act_func, one_candidate=config.test_w_one)
+        metrics_epoch, eval_msg = test_eval_like_npa_wu(npa_model, test_generator, act_func=config.test_act_func,
+                                                        one_candidate=config.test_w_one)
         #metrics_epoch, eval_msg = test_eval_npa_softmax(npa_model, test_generator)
         #raise KeyError("{} is no valid evluation method".format(config.eval_method))
 

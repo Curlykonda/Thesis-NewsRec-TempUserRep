@@ -190,6 +190,9 @@ class CNN_wu(nn.Module):
 
             encoded_news = self.cnn_encoder(article_one.unsqueeze(1))
             # encoded_news.shape = batch_size X n_cnn_filters X max_title_len
+            if n_news == 0:
+                print(article_one.shape)
+                print(encoded_news.shape)
 
             #pers attn
             contextual_rep.append(self.pers_attn_word(encoded_news.squeeze(), pref_query))
