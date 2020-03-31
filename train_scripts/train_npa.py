@@ -236,8 +236,6 @@ def main(config):
 
     # set device
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-    print(device)
-    print_setting(config, ['random_seed', 'log_method', 'test_w_one', 'eval_method', 'weight_decay'])
 
     hyper_params = {'lr': None, 'neg_sample_ratio': None,
                     'batch_size': config.batch_size,
@@ -293,6 +291,10 @@ def main(config):
         optim = torch.optim.Adam(npa_model.parameters(), lr=config.lr, weight_decay=config.weight_decay)
     #Adam(params, lr=0.001, betas=(0.9, 0.999), eps=1e-08, weight_decay=0, amsgrad=False) default
 
+    print("\n")
+    print(device)
+    print_setting(config, ['random_seed', 'log_method', 'test_w_one', 'eval_method', 'weight_decay', 'train_act_func', 'test_act_func'])
+
     # create dir for logging
     now = datetime.now()
     date = now.strftime("%m-%d-%y")
@@ -329,11 +331,13 @@ def main(config):
         ##########################################################################################
         #evaluate on test set
         ###############################
-        #if config.eval_method == 'wu':
-        metrics_epoch, eval_msg = test_eval_like_npa_wu(npa_model, test_generator, act_func=config.test_act_func,
-                                                        one_candidate=config.test_w_one)
-        #metrics_epoch, eval_msg = test_eval_npa_softmax(npa_model, test_generator)
-        #raise KeyError("{} is no valid evluation method".format(config.eval_method))
+        if config.eval_method == 'wu':
+            metrics_epoch, eval_msg = test_eval_like_npa_wu(npa_model, test_generator)
+        elif config.eval_method == 'custom':
+            metrics_epoch, eval_msg = test_eval_like_npa_wu(npa_model, test_generator, act_func=config.test_act_func,
+                                                            one_candidate=config.test_w_one)
+        else:
+            raise KeyError("{} is no valid evluation method".format(config.eval_method))
 
         # logging
         t2 = time.time()
