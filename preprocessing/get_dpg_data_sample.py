@@ -186,9 +186,9 @@ def get_dpg_data_sample(data_dir, n_news, n_users, snippet_len=30, min_hist_len=
 
 if __name__ == "__main__":
     data_dir = '../datasets/dpg/'
-    sample_name = "med_time_split"
-    n_news = int(45e3)
-    n_users = int(10e3)
+    sample_name = "large_time_split"
+    n_news = int(110e3)
+    n_users = int(50e3)
 
     news_data, user_data, logging_dates = get_dpg_data_sample(data_dir, n_news, n_users, save_path=data_dir,
                                                               sample_name=sample_name, test_time_thresh=1577228399)
