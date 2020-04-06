@@ -1,6 +1,7 @@
 import numpy as np
 import argparse
 import pickle
+import itertools
 import os
 from pathlib import Path
 import time
@@ -105,7 +106,6 @@ def test_eval_like_npa_wu(model, test_generator, act_func="sigmoid", one_candida
     metrics_epoch = []
     model.eval()
     device = torch.device(model.device)
-    print("test")
 
     click_scores = defaultdict(list)
     loss_epoch = []
@@ -150,21 +150,26 @@ def test_eval_like_npa_wu(model, test_generator, act_func="sigmoid", one_candida
                     click_scores[u_id][0].extend(preds)
                     click_scores[u_id][1].extend(targets)
 
-            loss_epoch.append(test_loss.item())
-            acc.append(compute_acc_tensors(y_probs, lbls))
+            metrics_epoch.append(
+                (test_loss.item(),
+                compute_acc_tensors(y_probs, lbls),
+                list(itertools.chain(*logits.detach().cpu().numpy()))
+                 )
+            )
+
             # precision, recall, thresholds = precision_recall_curve(y_true, y_scores)
             if device.type == 'cpu':
                 #break
                 pass
-
-    metrics_epoch.append(
-        (
-        np.mean(loss_epoch),
+    loss, acc, raw_scores = (zip(*metrics_epoch))
+    metrics_epoch = [
+        (np.mean(loss),
         np.mean(acc),
         np.mean([roc_auc_score(click_scores[u_id][1], click_scores[u_id][0]) for u_id in click_scores]),
-        np.mean([average_precision_score(click_scores[u_id][1], click_scores[u_id][0]) for u_id in click_scores])
+        np.mean([average_precision_score(click_scores[u_id][1], click_scores[u_id][0]) for u_id in click_scores]),
+        list(itertools.chain(*raw_scores))
         )
-            )
+    ]
 
     idx = min(5, lbls.shape[0]-1)
     if one_candidate:
@@ -176,7 +181,7 @@ def test_eval_like_npa_wu(model, test_generator, act_func="sigmoid", one_candida
 
     return metrics_epoch, eval_str
 
-def train_npa_wu_softmax(npa_model, criterion, optim, train_generator, act_func="softmax"):
+def train_npa_actfunc(npa_model, criterion, optim, train_generator, act_func="softmax"):
     metrics_epoch = []
     npa_model.train()
     device = torch.device(npa_model.device)
@@ -205,8 +210,9 @@ def train_npa_wu_softmax(npa_model, criterion, optim, train_generator, act_func=
                 loss_l2 = param.norm(2)
             else:
                 loss_l2 += param.norm(2)
-        #lambda_l2 = 0.0005
-        #loss = loss_bce + lambda_l2 * loss_l2
+
+        #loss_l2 *= config.lambda_l2
+        #loss = loss_bce + loss_l2
 
         # optimiser backward
         optim.zero_grad()
@@ -222,11 +228,12 @@ def train_npa_wu_softmax(npa_model, criterion, optim, train_generator, act_func=
         metrics_epoch.append((loss_bce.item(),
                               compute_acc_tensors(y_probs_cpu, lbl_cpu),
                               roc_auc_score(lbl_cpu, y_probs_cpu),  # TPR v. FPR with varying threshold
-                              average_precision_score(lbl_cpu, y_probs_cpu) # \text{AP} = \sum_n (R_n - R_{n-1}) P_n
+                              average_precision_score(lbl_cpu, y_probs_cpu), # \text{AP} = \sum_n (R_n - R_{n-1}) P_n
+                              list(itertools.chain(*logits.detach().cpu().numpy())),
+                              loss_l2.item()
                               ))
-                            #loss_l2.item()
 
-        if device.type == 'cpu': #and i_batch > 0
+        if device.type == 'cpu' and i_batch > 0: #
             print("Stopped after {} batches".format(i_batch + 1))
             break
     return metrics_epoch
@@ -237,9 +244,12 @@ def main(config):
     # set device
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
-    hyper_params = {'lr': None, 'neg_sample_ratio': None,
-                    'batch_size': config.batch_size,
-                     'random_seed': config.random_seed} # TODO: aggregate h_params for SummaryWriter
+    hyper_params = {'random_seed': config.random_seed,
+                    'lr': config.lr, 'neg_sample_ratio': config.neg_sample_ratio, 'batch_size': config.batch_size,
+                    'lambda_l2': config.lambda_l2, 'weight_decay': config.weight_decay,
+                    'train_act_func': config.train_act_func, 'test_act_func': config.test_act_func,
+                    'n_epochs': config.n_epochs, 'data_type': config.data_type
+                    }
 
     #set random seeds
     torch.manual_seed(config.random_seed)
@@ -248,8 +258,8 @@ def main(config):
 
     # Get & prepare data
     # data is indexed by user_ids
-    dataset, vocab, news_as_word_ids, art_id2idx, u_id2idx = get_dpg_data_processed(config.data_path, config.neg_sample_ratio,
-                                                                                    config.max_hist_len, config.max_news_len, load_prepped=True)
+    dataset, vocab, news_as_word_ids, art_id2idx, u_id2idx = get_dpg_data_processed(config.data_path, config.train_method, config.neg_sample_ratio,
+                                                                                    config.max_hist_len, config.max_news_len, load_prepped=False)
     word_embeddings = get_embeddings_from_pretrained(vocab, emb_path=config.word_emb_path)
 
     train_data = dataset['train']
@@ -270,11 +280,13 @@ def main(config):
     #
     model_params = {'n_users': len(dataset['train'])+len(dataset['test']), 'vocab_len': len(vocab),
                     'dim_user_id': 50, 'dim_pref_query': 200, 'dim_words': 300,
-                    'max_title_len': config.max_hist_len, 'device': device}
+                    'max_title_len': config.max_hist_len, 'device': device,
+                    'interest_extractor': config.interest_extractor}
 
     npa_model = NPA_wu(n_users=len(dataset['train'])+len(dataset['test']), vocab_len=len(vocab), pretrained_emb=word_embeddings,
                        emb_dim_user_id=50, emb_dim_pref_query=200, emb_dim_words=300,
-                       max_news_len=config.max_news_len, device=device)
+                       max_news_len=config.max_news_len, max_hist_len=config.max_hist_len,
+                       device=device, interest_extractor=config.interest_extractor)
     npa_model.to(device)
     #
     #npa_model.apply(init_weights)
@@ -291,9 +303,8 @@ def main(config):
         optim = torch.optim.Adam(npa_model.parameters(), lr=config.lr, weight_decay=config.weight_decay)
     #Adam(params, lr=0.001, betas=(0.9, 0.999), eps=1e-08, weight_decay=0, amsgrad=False) default
 
-    print("\n")
     print(device)
-    print_setting(config, ['random_seed', 'log_method', 'test_w_one', 'eval_method', 'weight_decay', 'train_act_func', 'test_act_func'])
+    print_setting(config, ['random_seed', 'train_method', 'eval_method', 'weight_decay', 'train_act_func', 'test_act_func', 'data_path'])
 
     # create dir for logging
     now = datetime.now()
@@ -311,6 +322,8 @@ def main(config):
     res_path.mkdir(parents=True, exist_ok=True)
     writer = SummaryWriter(res_path) # logging
 
+    writer.add_hparams(hparam_dict=hyper_params, metric_dict={'test': 0.1})
+
     metrics_train = defaultdict(list)
     metrics_test = defaultdict(list)
 
@@ -324,7 +337,7 @@ def main(config):
         t0 = time.time()
         npa_model.train()
 
-        metrics_epoch = train_npa_wu_softmax(npa_model, criterion, optim, train_generator, act_func=config.train_act_func)
+        metrics_epoch = train_npa_actfunc(npa_model, criterion, optim, train_generator, act_func=config.train_act_func)
         t1 = time.time()
         metrics_train = log_metrics(epoch, metrics_epoch, metrics_train, writer, method=config.log_method)
         #
@@ -344,8 +357,8 @@ def main(config):
         metrics_test = log_metrics(epoch, metrics_epoch, metrics_test, writer, mode='test', method=config.log_method)
 
         print("\n {} epoch".format(epoch))
-        print("TRAIN: BCE loss {:1.3f} \t acc {:0.3f} \t auc {:0.3f} \t ap {:0.3f} in {:0.1f}s".format(
-                metrics_train['loss'][-1], metrics_train['acc'][-1], metrics_train['auc'][-1], metrics_train['ap'][-1], (t1-t0)))
+        print("TRAIN: BCE loss {:1.3f} \t acc {:0.3f} \t auc {:0.3f} \t ap {:0.3f} \t L2 loss: {:0.3f} in {:0.1f}s".format(
+                metrics_train['loss'][-1], metrics_train['acc'][-1], metrics_train['auc'][-1], metrics_train['ap'][-1], metrics_train['loss_l2'][-1], (t1-t0)))
         print("TEST: BCE loss {:1.3f}  \t acc {:0.3f} \t auc {:0.3f} \t ap {:0.3f} in {:0.1f}s".format(
                 metrics_test['loss'][-1], metrics_test['acc'][-1], metrics_test['auc'][-1], metrics_test['ap'][-1], (t2-t1)))
 
@@ -356,7 +369,7 @@ def main(config):
 
     print("\n---------- Done in {0:.2f} min ----------\n".format((time.time()-t_train_start)/60))
     #writer.add_figure()
-    #write.add_hparams
+
     writer.close()
 
     #save metrics & config
@@ -375,30 +388,36 @@ def map_round_tensor(tensor, decimals=3, idx=0):
         return list(map(lambda x: x.round(decimals), tensor[:idx].detach().cpu().numpy()))
 
 def log_metrics(epoch, metrics_epoch, metrics, writer, mode='train', method='epoch'):
-    loss, acc, auc, ap = (zip(*metrics_epoch))
 
-    stats = {'loss': loss,
-            'acc': acc,
-            'auc': auc,
-            'ap': ap
-    }
-    #TODO: add histogram of logits for each epoch to observe (learning) behaviour
-    # -> expect that logits widely distributed in the beginning but more concentrated around certain high & low points
-    for key, val in stats.items():
+    keys = ['loss', 'acc', 'auc', 'ap', 'loss_l2']
+
+    if mode =='train':
+        loss, acc, auc, ap, logits, loss_l2 = (zip(*metrics_epoch))
+        stats = (loss, acc, auc, ap, loss_l2)
+    else:
+        loss, acc, auc, ap, logits = (zip(*metrics_epoch))
+        stats = (loss, acc, auc, ap)
+
+    for i, val in enumerate(stats):
         if method == 'epoch':
-            metrics[key].append(np.mean(val))
-            writer.add_scalar(key + '/' + mode, np.mean(val), global_step=epoch)
-            writer.add_scalar(key + '-var/' + mode, np.var(val), global_step=epoch)
+            metrics[keys[i]].append(np.mean(val))
+            writer.add_scalar(keys[i] + '/' + mode, np.mean(val), global_step=epoch)
+            writer.add_scalar(keys[i] + '-var/' + mode, np.var(val), global_step=epoch)
 
         elif method == 'batches' and mode != 'test':
             for v in val:
-                writer.add_scalar(key + '/' + mode, v, len(metrics[key]))
-                writer.add_scalar(key + '-var/' + mode, v, len(metrics[key]))
+                writer.add_scalar(keys[i] + '/' + mode, v, len(metrics[keys[i]]))
+                writer.add_scalar(keys[i] + '-var/' + mode, v, len(metrics[keys[i]]))
 
-                metrics[key].append(v)
+                metrics[keys[i]].append(v)
 
         else:
             raise NotImplementedError()
+
+    logits = list(itertools.chain(*logits))
+    writer.add_histogram("logits/" + mode, np.array(logits), epoch)
+    # -> expect that logits widely distributed in the beginning but become more concentrated around certain high & low points
+
     writer.close()
     return metrics
 
@@ -407,15 +426,11 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
 
     #general
-    parser.add_argument('--random_seed', type=int, default=42,
-                        help='random seed for reproducibility')
+    parser.add_argument('--random_seed', type=int, default=42, help='random seed for reproducibility')
 
     # input data
-    parser.add_argument('--data_type', type=str, default='DPG',
-                        help='options for data format: DPG, NPA or Adressa ')
-    parser.add_argument('--data_path', type=str, default='../datasets/dpg/dev_time_split/',
-                        help='path to data directory') # dev : i10k_u5k_s30/
-
+    parser.add_argument('--data_type', type=str, default='DPG', help='options for data format: DPG, NPA or Adressa ')
+    parser.add_argument('--data_path', type=str, default='../datasets/dpg/dev_time_split/', help='path to data directory') # dev : i10k_u5k_s30/
     parser.add_argument('--word_emb_path', type=str, default='../embeddings/glove_eng.840B.300d.txt',
                         help='path to directory with word embeddings')
 
@@ -424,18 +439,30 @@ if __name__ == "__main__":
                         help='maximum length of user reading history, shorter ones are padded; should be in accordance with the input datasets')
     parser.add_argument('--max_news_len', type=int, default=30,
                         help='maximum length of news article, shorter ones are padded; should be in accordance with the input datasets')
-
     parser.add_argument('--neg_sample_ratio', type=int, default=4,
                         help='Negative sample ratio N: for each positive impression generate N negative samples')
+    parser.add_argument('--candidate_generation', type=str, default='neg_sampling',
+                        help='Method to generate candidate articles: [neg_sampling, neg_sampling_time]')
+    parser.add_argument('--train_method', type=str, default='pos_cut_off',
+                        help='Method for network training & format of training samples: [wu, pos_cut_off, masked_interests]')
+
+    #model params
+    parser.add_argument('--interest_extractor', type=str, default=None,
+                        help='[None, gru]')
 
     #training
     parser.add_argument('--batch_size', type=int, default=100, help='batch size for training')
     parser.add_argument('--n_epochs', type=int, default=10, help='Epoch number for training')
+    parser.add_argument('--lambda_l2', type=float, default=0.0005, help='Parameter to control L2 loss')
+
+    parser.add_argument('--train_act_func', type=str, default='softmax',
+                        help='Output activation func Training: [softmax, sigmoid]')
+    parser.add_argument('--test_act_func', type=str, default='sigmoid',
+                        help='Output activation func Testing: [softmax, sigmoid]')
     parser.add_argument('--log_method', type=str, default='epoch', help='Mode for logging the metrics: [epoch, batches]')
     parser.add_argument('--test_w_one', type=bool, default=False, help='use only 1 candidate during testing')
     parser.add_argument('--eval_method', type=str, default='wu', help='Mode for evaluating NPA model: [wu, custom]')
-    parser.add_argument('--train_act_func', type=str, default='softmax', help='Output activation func Training: [softmax, sigmoid]')
-    parser.add_argument('--test_act_func', type=str, default='sigmoid', help='Output activation func Testing: [softmax, sigmoid]')
+
 
     # optimiser
     parser.add_argument('--lr', type=float, default=0.001, help='Learning rate')
