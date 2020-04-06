@@ -1,25 +1,28 @@
 import os
 import numpy as np
 
-from source.utils_npa import *
-from source.metrics import *
-
-from source.modules.click_predictor import SimpleDot
-
-
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+from source.utils_npa import *
+from source.metrics import *
 
-class NPA(torch.nn.Module):
+from source.modules.click_predictor import SimpleDot
+from source.modules.news_encoder import NewsEncoderWuCNN
+from source.modules.attention import PersonalisedAttentionWu
+from source.modules.interest_extractor import GRU as GRU_interest
 
-    def __init__(self, news_encoder, user_encoder, click_predictor, dim_uid_emb, dim_pref_query, word_embeddings, dim_word_embeddings, cnn_filter, device):
-        super(NPA, self).__init__()
+
+class BaseModelNPA(torch.nn.Module):
+
+    def __init__(self, news_encoder, interest_extractor, user_encoder, click_predictor, dim_uid_emb, dim_pref_query, word_embeddings, dim_word_embeddings, cnn_filter, device):
+        super(BaseModelNPA, self).__init__()
 
         self.device = device
 
         self.news_encoder = news_encoder
+        self.interest_extractor = interest_extractor
         self.user_encoder = user_encoder
         self.click_predictor = click_predictor
 
@@ -31,7 +34,8 @@ class NPA(torch.nn.Module):
 
         encoded_news = self.news_encoder.encode(browsing_history, user_id)
 
-        user_representation = self.user_encoder.encode(encoded_news, user_id)
+        contextualised_news = self.interest_extractor(encoded_news)
+        user_representation = self.user_encoder.encode(contextualised_news, user_id)
 
         encoded_candidates = self.news_encoder.encode(candidate_news, user_id)
 
@@ -42,13 +46,14 @@ class NPA(torch.nn.Module):
 class NPA_wu(nn.Module):
 
     def __init__(self, n_users, vocab_len, pretrained_emb, emb_dim_user_id=50, emb_dim_pref_query=200,
-                 emb_dim_words=300, max_news_len=30, n_filters_cnn=400, dropout_p=0.2, device='cpu'):
+                 emb_dim_words=300, max_news_len=30, max_hist_len=50, n_filters_cnn=400, dropout_p=0.2, device='cpu',
+                 news_encoder=None, user_encoder=None, interest_extractor=None, click_predictor=None):
         super(NPA_wu, self).__init__()
 
         self.device = device
         self.vocab_len = vocab_len
         self.max_title_len = max_news_len
-        self.max_hist_len = None
+        self.max_hist_len = max_hist_len
 
         self.dim_news_rep = n_filters_cnn
         self.dim_user_rep = n_filters_cnn
@@ -70,15 +75,21 @@ class NPA_wu(nn.Module):
 
         self.user_id_embeddings = nn.Embedding(n_users, self.dim_emb_user_id, padding_idx=0)
 
-        self.news_encoder = CNN_wu(n_filters=n_filters_cnn, word_emb_dim=emb_dim_words, dim_pref_q=emb_dim_pref_query, dropout_p=dropout_p) # news encoder
+        self.news_encoder = (NewsEncoderWuCNN(n_filters=n_filters_cnn, word_emb_dim=emb_dim_words, dim_pref_q=emb_dim_pref_query, dropout_p=dropout_p)
+                             if news_encoder is None else news_encoder)
 
         # preference queries
-        self.pref_q_word = PrefQuery_wu(self.dim_pref_q, self.dim_emb_user_id)
-        self.pref_q_article = PrefQuery_wu(self.dim_pref_q, self.dim_emb_user_id)
+        self.pref_q_word = PrefQueryWu(self.dim_pref_q, self.dim_emb_user_id)
+        self.pref_q_article = PrefQueryWu(self.dim_pref_q, self.dim_emb_user_id)
 
-        self.user_encoder = PersonalisedAttention(emb_dim_pref_query, self.dim_news_rep) # user representation
+        self.interest_extractor = (None if interest_extractor is None
+                                   else GRU_interest(self.dim_news_rep, self.dim_user_rep, self.max_hist_len))
 
-        self.click_predictor = SimpleDot(self.dim_user_rep, self.dim_news_rep)  # click predictor
+        self.user_encoder = (PersonalisedAttentionWu(emb_dim_pref_query, self.dim_news_rep)
+                             if user_encoder is None else user_encoder)
+
+        self.click_predictor = (SimpleDot(self.dim_user_rep, self.dim_news_rep)
+                                if click_predictor is None else click_predictor)
 
     def forward(self, user_id, brows_hist_as_ids, candidates_as_ids):
 
@@ -114,11 +125,13 @@ class NPA_wu(nn.Module):
 
         pref_q_article = self.pref_q_article(self.user_id_embeddings(user_id))
 
-        user_rep = self.user_encoder(encoded_brows_hist, pref_q_article)
+        if self.interest_extractor is not None:
+            in_shape = encoded_brows_hist.shape
+            encoded_brows_hist = torch.stack(self.interest_extractor(encoded_brows_hist), dim=2)
 
-        self.user_rep = user_rep
+        self.user_rep = self.user_encoder(encoded_brows_hist, pref_q_article)
 
-        return user_rep
+        return self.user_rep
 
     def get_representation_shapes(self):
         shapes = {}
@@ -132,13 +145,13 @@ class NPA_wu(nn.Module):
 
         return
 
-class PrefQuery_wu(nn.Module):
+class PrefQueryWu(nn.Module):
     '''
     Given an embedded user id, create a preference query vector (that is used in personalised attention)
 
     '''
     def __init__(self, dim_pref_query=200, dim_emb_u_id=50, activation='relu', device='cpu'):
-        super(PrefQuery_wu, self).__init__()
+        super(PrefQueryWu, self).__init__()
 
         self.dim_pref_query = dim_pref_query
         self.dim_u_id = dim_emb_u_id
@@ -159,83 +172,3 @@ class PrefQuery_wu(nn.Module):
         pref_query = self.lin_proj(u_id) # batch_size X u_id_emb_dim
 
         return self.activation(pref_query)
-
-class CNN_wu(nn.Module):
-
-    def __init__(self, n_filters=400, dim_pref_q=200, word_emb_dim=300, kernel_size=3, dropout_p=0.2):
-        super(CNN_wu, self).__init__()
-
-        self.n_filters = n_filters
-        self.dim_pref_q = dim_pref_q
-        self.word_emb_dim = word_emb_dim
-
-        self.dropout_in = nn.Dropout(p=dropout_p)
-
-        self.cnn_encoder = nn.Sequential(nn.Conv1d(1, n_filters, kernel_size=(kernel_size, word_emb_dim), padding=(kernel_size - 2, 0)),
-                        nn.ReLU(),
-                        nn.Dropout(p=dropout_p)
-        )
-
-        self.pers_attn_word = PersonalisedAttention(dim_pref_q, n_filters)
-
-    def forward(self, embedded_news, pref_query):
-        contextual_rep = []
-        # embedded_news.shape = batch_size X max_hist_len X max_title_len X word_emb_dim
-        embedded_news = self.dropout_in(embedded_news)
-        # encode each browsed news article and concatenate
-        for n_news in range(embedded_news.shape[1]):
-
-            # concatenate words
-            article_one = embedded_news[:, n_news, :, :].squeeze(1) # shape = (batch_size, title_len, emb_dim)
-
-            # if n_news == 0:
-            #     print(article_one.shape)
-
-            encoded_news = self.cnn_encoder(article_one.unsqueeze(1))
-            # encoded_news.shape = batch_size X n_cnn_filters X max_title_len
-
-            #pers attn
-            contextual_rep.append(self.pers_attn_word(encoded_news.squeeze(-1), pref_query))
-
-            assert contextual_rep[-1].shape[1] == self.n_filters # batch_size X n_cnn_filters
-
-        return torch.stack(contextual_rep, axis=2) # batch_s X dim_news_rep X history_len
-
-class NewsEncoderWu(nn.Module):
-    def __init__(self):
-        pass
-
-
-    def forward(self, *input, **kwargs):
-        pass
-
-
-class PersonalisedAttention(nn.Module):
-    def __init__(self, dim_pref_q, dim_news_rep):
-        super(PersonalisedAttention, self).__init__()
-
-        self.dim_pref_q = dim_pref_q
-        self.dim_news_rep = dim_news_rep
-
-        self.proj_pref_q = nn.Sequential(
-            nn.Linear(dim_pref_q, dim_news_rep),
-            nn.Tanh()
-        )
-
-        self.attn_weights = None
-
-    def forward(self, enc_input, pref_q):
-
-        # enc_input.shape = (batch_size, dim_news_rep, title_len)
-
-        pref_q = self.proj_pref_q(pref_q) # transform pref query
-
-        attn_a = torch.bmm(torch.transpose(enc_input, 1, 2), pref_q.unsqueeze(2)).squeeze(-1) # dot product over batch http://pytorch.org/docs/0.2.0/torch.html#torch.bmm
-        attn_weights = F.softmax(attn_a, dim=-1)
-
-        self.attn_weights = attn_weights
-        #assert torch.sum(attn_weights, dim=1) == torch.ones(attn_weights.shape[0], dtype=float) # (normalised) attn weights should sum to 1
-
-        attn_w_rep = torch.matmul(enc_input, attn_weights.unsqueeze(2)).squeeze(-1) # attn-weighted representation r of i-th news
-
-        return attn_w_rep

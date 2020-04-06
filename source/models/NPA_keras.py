@@ -114,16 +114,19 @@ def build_model(config, n_users, vocab_len, pretrained_emb, emb_dim_user_id=50, 
     # candidate items - as pseudo K + 1 classification task
     candidates = [keras.Input((config.max_len_title,), dtype='int32') for _ in range(1 + config.neg_sample_ratio)]
     candidate_vecs = [newsEncoder([candidate, user_id]) for candidate in candidates]
-    logits = [keras.layers.dot([user_rep, candidate_vec], axes=-1) for candidate_vec in candidate_vecs]
-    logits = keras.layers.Activation(keras.activations.softmax)(keras.layers.concatenate(logits))
+    # logits
+    scores_raw = [keras.layers.dot([user_rep, candidate_vec], axes=-1) for candidate_vec in candidate_vecs]
+    # normalised probs
+    softm_probs = keras.layers.Activation(keras.activations.softmax)(keras.layers.concatenate(scores_raw))
 
-    model = Model(candidates + all_news_input + [user_id], logits)
+    model = Model(candidates + all_news_input + [user_id], softm_probs)
     model.compile(loss='categorical_crossentropy', optimizer=Adam(lr=0.001), metrics=['acc'])
 
     candidate_one = keras.Input((config.max_len_title,))
     candidate_one_vec = newsEncoder([candidate_one, user_id])
-    score = keras.layers.Activation(keras.activations.sigmoid)(keras.layers.dot([user_rep, candidate_one_vec], axes=-1))
-    model_test = keras.Model(inputs=[candidate_one] + all_news_input + [user_id], outputs=score)
+    score_raw = keras.layers.dot([user_rep, candidate_one_vec], axes=-1)
+    score_sigmoid = keras.layers.Activation(keras.activations.sigmoid)(score_raw)
+    model_test = keras.Model(inputs=[candidate_one] + all_news_input + [user_id], outputs=score_sigmoid)
 
     return model, model_test
 
