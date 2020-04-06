@@ -5,9 +5,10 @@ import pickle
 from pathlib import Path
 import smart_open
 import random
+
 import datetime
 
-from collections import OrderedDict, defaultdict
+from collections import OrderedDict, defaultdict, Counter
 from tqdm import tqdm
 
 def data_stream_generator(data_dir):
@@ -31,17 +32,16 @@ def subsample_items(n_items, snippet_len, data_dir, keys_to_exclude = ["short_id
 
     for i, item in enumerate(data_stream_generator(data_dir + "items")):
         #item.keys() = dict_keys(['text', 'pub_date', 'author', 'url', 'short_id'])
-        if snippet_len != None:
+        if snippet_len is not None:
             item['snippet'] = get_text_snippet(item['text'], snippet_len)
 
         val_dict = {key: val for (key, val) in item.items() if key not in keys_to_exclude}
         item_dict['all'][item['short_id']] = val_dict
 
         if item['pub_date']: #< test_time_thresh:
-             pass
-        # currently no pub_date available [30.03.]
+             pass # currently no pub_date available [30.03.]
 
-        if i == n_items - 1:
+        if i == n_items-1:
             break
 
     return item_dict
@@ -67,7 +67,18 @@ def update_logging_dates(articles_read, logging_dates):
 
 def subsample_users(n_users, item_data, data_dir, min_n_arts, remove_unk_arts=True, test_time_thresh=None):
 
-    valid_item_ids = set(item_data['all'].keys())
+    if isinstance(item_data, dict):
+        # use a given item sub sample
+        valid_item_ids = set(item_data['all'].keys())
+        n_max_items = len(item_data['all'])
+    elif isinstance(item_data, int):
+        valid_item_ids = set()
+        n_max_items = item_data
+        item_data = {'all': set()}
+
+
+    c_articles_raw = Counter() # without threshold
+    c_articles_thresh = Counter() # count only those from 'valid' histories
 
     if test_time_thresh is not None:
         item_data['train'] = set()
@@ -107,6 +118,8 @@ def subsample_users(n_users, item_data, data_dir, min_n_arts, remove_unk_arts=Tr
                                 user['articles_test'].append(entry)
 
                         history.append(entry)
+                        c_articles_raw.update([art_id])
+
                 user['articles_read'] = history
 
             # evaluate length reading history
@@ -115,10 +128,14 @@ def subsample_users(n_users, item_data, data_dir, min_n_arts, remove_unk_arts=Tr
                 # item.keys() = dict_keys(['user_id', 'articles_read', 'opened_pushes', 'articles_pushed'])
                 if test_time_thresh is not None:
                     if len(user['articles_train']) >= min_n_arts:
-                        pass
                         #
-                        item_data['train'].update([art_id for _, art_id, _ in user['articles_train']])
-                        item_data['test'].update([art_id for _, art_id, _ in user['articles_test']])
+                        art_train = [art_id for _, art_id, _ in user['articles_train']]
+                        item_data['train'].update(art_train)
+                        c_articles_thresh.update(art_train)
+
+                        art_test = [art_id for _, art_id, _ in user['articles_test']]
+                        item_data['test'].update(art_test)
+                        c_articles_thresh.update(art_test)
                     else:
                         continue
 
@@ -132,7 +149,7 @@ def subsample_users(n_users, item_data, data_dir, min_n_arts, remove_unk_arts=Tr
                     print("{} \t {}".format(len(user_dict), removed_users))
 
         # break condition
-        if len(user_dict) == n_users or i == n_users * 200:
+        if len(user_dict) == n_users or i == n_users * 200: #200
             break
     #print("Users sampled {}".format(len(user_dict)))
     print("\n Start logging date: {} \t End: {}".format(*logging_dates))
@@ -186,9 +203,14 @@ def get_dpg_data_sample(data_dir, n_news, n_users, snippet_len=30, min_hist_len=
 
 if __name__ == "__main__":
     data_dir = '../datasets/dpg/'
-    sample_name = "large_time_split"
-    n_news = int(110e3)
-    n_users = int(50e3)
+    sample_name = "dev_time_split_test"
+
+    dataset_settings = {'dev': [10e3, 2e3], 'medium': [45e3, 10e3], 'large': [150e3, 50e3]}
+
+    n_news, n_users = dataset_settings['dev']
+
+    threshold_date = (2019, 12, 24, 23, 59, 59)
+    #datetime.datetime(2019, 12, 24, 23, 59, 59).strftime('%s')
 
     news_data, user_data, logging_dates = get_dpg_data_sample(data_dir, n_news, n_users, save_path=data_dir,
                                                               sample_name=sample_name, test_time_thresh=1577228399)
