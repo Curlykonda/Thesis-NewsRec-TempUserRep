@@ -36,65 +36,92 @@ def sample_n_from_elements(elements, ratio):
         return random.sample(elements, ratio)
 
 
-def determine_pos_cands(impres, n_min, n_max, neg_sample_ratio, scale=8):
+def determine_n_samples(hist_len, n_max=10, max_hist_len=50, scale=0.08):
 
-    #determine number of candidates depending on the number of positive impressions
-    n_cands = min(n_max, np.log(len(impres)) * scale // (neg_sample_ratio + 1))
+    #determine number of (training) instance depending on the history length
+    if scale is None:
+        scale = np.log(n_max) / max_hist_len
+    n_samples = min(n_max, round(np.exp(hist_len * scale)))
 
-    if n_cands > len(impres) // 2:
-        n_cands = n_min
+    return int(n_samples)
 
-    pos_cands = [impres.pop()]
-    pos_cands += random.sample(impres, n_cands-1)
+def generate_target_hist_instance_pos_cutoff(u_id, history, test_impressions, candidate_art_ids, art_id2idx, max_hist_len, min_hist_len=5, candidate_generation='neg_sampling', neg_sample_ratio=4, mode="train"):
+    '''
+    Generate samples with target-history tuples at different positions
 
-    return pos_cands
+    :param u_id: user id mapped to user index
+    :param history: sequence of article indices (article ids already mapped to indices)
+    :param candidate_art_ids: set of candidate article ids
+    :param art_id2idx: dictionary mapping article ids to indices
+    :param max_hist_len:
+    :param min_hist_len:
+    :param candidate_generation:
+    :param neg_sample_ratio:
+    :return:
+    '''
+    samples = []
 
+    if "train" == mode:
+        n_samples = determine_n_samples(len(history))
 
-def create_train_sample(pos_sample, cand_article_ids, art_id2idx, neg_sample_ratio, candidate_generation='neg_sampling', preserve_seq_order=False):
-    sample = ()
+        for i in range(n_samples):
+            if i == 0:
+                target_idx = len(history)-1
+            else:
+                target_idx = random.choice(range(min_hist_len, len(history)))
+            # generate target history instance
+            target = history[target_idx]
+            hist = pad_sequence(history[:target_idx], max_hist_len, pad_value=0)
+            # candidate generation
+            cands, lbls = generate_candidates_train(target, candidate_art_ids, art_id2idx, neg_sample_ratio)
+            samples.append((u_id, hist, cands, lbls))
+
+    elif "test" == mode:
+
+        for test_art in test_impressions:
+            target = test_art
+            hist = pad_sequence(history, max_hist_len)
+            # candidate generation
+            cands, lbls = generate_candidates_train(target, candidate_art_ids, art_id2idx, neg_sample_ratio)
+            samples.append((u_id, hist, cands, lbls))
+
+            history.append(target) # history is extended by the new impression to predict the next one
+    else:
+        raise KeyError()
+
+    return samples
+
+def generate_candidates_train(target, cand_article_ids, art_id2idx, neg_sample_ratio, candidate_generation='neg_sampling', constrained_target_time=False):
+    '''
+
+    :param target: target article as index
+    :param cand_article_ids: set of article ids as valid candidates
+    :param art_id2idx: dictionary mapping article id to index
+    :param neg_sample_ratio:
+    :param candidate_generation: indicate method of candidate generation
+
+    :return:
+    '''
 
     if candidate_generation == 'neg_sampling':
-        candidate_articles = [art_id2idx[art_id] for art_id in sample_n_from_elements(cand_article_ids, neg_sample_ratio)]
-        candidate_articles.append(pos_sample)
+        candidates = [art_id2idx[art_id] for art_id in sample_n_from_elements(cand_article_ids, neg_sample_ratio)]
+        candidates.append(target)
         lbls = [0] * neg_sample_ratio + [1]  # create temp labels
-        candidate_articles = list(zip(candidate_articles, lbls))  # zip art_id and label
-        random.shuffle(candidate_articles)  # shuffle article ids with corresponding label
-        candidate_articles = np.array(candidate_articles)
+        candidates = list(zip(candidates, lbls))  # zip art_id and label
+        random.shuffle(candidates)  # shuffle article ids with corresponding label
+
+        candidates, lbls = zip(*candidates)
     else:
         raise NotImplementedError()
 
-    # if preserve_seq_order:
-    #     raise NotImplementedError()
-    # else:
-    #     pos_set = list(set(pos_impre) - set([pos_sample]))  # remove positive sample from user history
-    #     # sample RANDOM elems from set of pos impressions -> Note that this is the orig. NPA approach => Sequence Order is lost
-    #     hist = [int(p) for p in random.sample(pos_set, min(max_hist_len, len(pos_set)))[:max_hist_len]]
-    #
-    # hist += [0] * (max_hist_len - len(hist))
-    #
-    # # add training instance
-    # # add_instance_to_data()
-    # candidates['train'].append(candidate_articles[:, 0])  # ids of candidate items
-    # lbls = candidate_articles[:, 1]
-    # assert lbls.__contains__(1)  # sanity check
-    # labels['train'].append(lbls)
-    #
-    # user_ids['train'].append(u_id2idx[u_id])
-    # user_hist_pos['train'].append(hist)
-    #
-    # data_train_prepped.append(
-    #     (u_id2idx[u_id],
-    #      hist,
-    #      candidate_articles[:, 0],
-    #      candidate_articles[:, 0])
-    # )
+    return candidates, lbls
 
 
+def add_instance_to_data(data, u_id, hist, cands, lbls):
+    data.append({'input': (np.array(u_id, dtype='int32'), np.array(hist, dtype='int32'), np.array(cands, dtype='int32')),
+                 'labels': np.array(lbls, dtype='int32')})
 
-    pass
-
-
-def prep_dpg_user_file_wu(user_file, news_file, art_id2idx, test_interval_days : int, neg_sample_ratio=4, max_hist_len=50, preserve_seq=False):
+def prep_dpg_user_file(user_file, news_file, art_id2idx, train_method, test_interval_days : int, neg_sample_ratio=4, max_hist_len=50, preserve_seq=False):
     '''
     Given a subsample of users and the valid articles, we truncate and encode users' reading history with article indices.
     Construct the data input for the Wu NPA as follows:
@@ -110,6 +137,7 @@ def prep_dpg_user_file_wu(user_file, news_file, art_id2idx, test_interval_days :
     :param test_interval: (int) number of days specifying the time interval for the testing set
     :return:
     '''
+
     with open(user_file, "rb") as fin:
         user_data = pickle.load(fin)
 
@@ -123,27 +151,17 @@ def prep_dpg_user_file_wu(user_file, news_file, art_id2idx, test_interval_days :
     # determine start of the test interval in UNIX time
     if "threshold" in logging_dates.keys():
         start_test_interval = logging_dates['threshold']
-    else:
+    elif test_interval_days is not None:
         start_test_interval = logging_dates['last'] - ((60*60*24) * test_interval_days)
+    else:
+        raise NotImplementedError()
 
     u_id2idx = {}
-
-    user_ids = {'train': [], 'test': []}
-    candidates = {'train': [], 'test': []}
-    labels = {'train': [], 'test': []}
-    user_hist_pos = {'train': [], 'test': []}
-
-    data_train_prepped = []
-    data_test_prepped = []
+    data = defaultdict(list)
 
     '''
     - For each user, we produce N training samples (N := # pos impressions) => all users have at least 5 articles
     - test samples is constrained by time (last week)
-    - 
-    4) Keep it simple for reproduction: 
-        - for training, use the first M impressions up to test date threshold
-        - for testing, use impressions counting backwards from last entry
-        - if user has no impressions during testing interval, keep only for training 
     
     Notes from Wu: 
     - testing: for each user, subsample a user history (same for all test candidates)
@@ -190,104 +208,117 @@ def prep_dpg_user_file_wu(user_file, news_file, art_id2idx, test_interval_days :
 
         # assumption: for testing use the entire reading history of that user but evaluate on unseen articles
 
-        cand_article_ids = articles_train - set(train_impres)  # exclude positive samples from pool of pot. neg. samples
-        for pos_sample in train_impres:
-            #
-            # (u_id, hist, cands, lbls)
-            #train_sample = create_train_sample(pos_sample, cand_article_ids, neg_sample_ratio, candidate_generation='neg_sampling')
-            #
-            # Candidate Generation: generate negative samples
-            candidate_articles = [art_id2idx[art_id] for art_id in sample_n_from_elements(cand_article_ids, neg_sample_ratio)]
-            candidate_articles.append(pos_sample)
-            lbls = [0] * neg_sample_ratio + [1] # create temp labels
-            candidate_articles = list(zip(candidate_articles, lbls)) # zip art_id and label
-            random.shuffle(candidate_articles) # shuffle article ids with corresponding label
-            candidate_articles = np.array(candidate_articles)
+        cand_article_ids = set(news_data['all'].keys())
 
-            if preserve_seq:
-                pass
-            else:
+        if 'wu' == train_method:
+            #########################################
+            # Wu Sub-Sampling of random histories
+            #########################################
+            for pos_sample in train_impres:
+                #
+                # (u_id, hist, cands, lbls)
+                # train_sample = create_train_sample(pos_sample, cand_article_ids, neg_sample_ratio, candidate_generation='neg_sampling')
+                #
+                # Candidate Generation: generate negative samples
+                candidate_articles = [art_id2idx[art_id] for art_id in
+                                      sample_n_from_elements(cand_article_ids - set(train_impres), neg_sample_ratio)]
+                candidate_articles.append(pos_sample)
+                lbls = [0] * neg_sample_ratio + [1]  # create temp labels
+                candidate_articles = list(zip(candidate_articles, lbls))  # zip art_id and label
+                random.shuffle(candidate_articles)  # shuffle article ids with corresponding label
+                candidate_articles = np.array(candidate_articles)
+
+
                 pos_set = list(set(pos_impre) - set([pos_sample]))  # remove positive sample from user history
                 # sample RANDOM elems from set of pos impressions -> Note that this is the orig. NPA approach => Sequence Order is lost
                 hist = [int(p) for p in random.sample(pos_set, min(max_hist_len, len(pos_set)))[:max_hist_len]]
 
-            hist += [0] * (max_hist_len - len(hist))
+                hist += [0] * (max_hist_len - len(hist))
 
-            # add training instance
-            #add_instance_to_data()
-            candidates['train'].append(candidate_articles[:, 0])  # ids of candidate items
-            lbls = candidate_articles[:, 1]
-            assert lbls.__contains__(1) # sanity check
-            labels['train'].append(lbls)
+                add_instance_to_data(data['train'], u_id2idx[u_id], hist, candidate_articles[:, 0], candidate_articles[:, 1])
 
-            user_ids['train'].append(u_id2idx[u_id])
-            user_hist_pos['train'].append(hist)
+            # create test instances
+            if len(test_impres) != 0:
+                # subsample history: RANDOM elems from set of pos impressions
+                pos_set = pos_impre
+                hist_test = [int(p) for p in random.sample(pos_set, min(max_hist_len, len(pos_set)))[:max_hist_len]]
+                hist_test += [0] * (max_hist_len - len(hist_test))
 
-            data_train_prepped.append(
-                (u_id2idx[u_id],
-                hist,
-                candidate_articles[:, 0],
-                candidate_articles[:, 1])
-            )
+                if w_time_stamp:
+                    test_ids = set(list(zip(*test_impres))[0])
+                else:
+                    test_ids = set(test_impres)
 
-        # create test instances
-        if len(test_impres) != 0:
-            # subsample history: RANDOM elems from set of pos impressions
-            pos_set = pos_impre
-            hist_test = [int(p) for p in random.sample(pos_set, min(max_hist_len, len(pos_set)))[:max_hist_len]]
-            hist_test += [0] * (max_hist_len - len(hist_test))
+                cand_article_ids = articles_test - test_ids
 
-            if w_time_stamp:
-                test_ids = set(list(zip(*test_impres))[0])
-            else:
-                test_ids = set(test_impres)
+                for pos_test_sample in test_impres:
+                    '''              
+                    - Remove pos impressions from pool of cand articles
+                    - Sample negative examples
+                    - Add labels
+                    - Shuffle zip(cands, lbls)            
+                    - add samples to data dict            
+                    '''
 
-            cand_article_ids = articles_test - test_ids
+                    # generate test candidates
+                    ## sample candidates from articles in test interval
+                    candidate_articles = [art_id2idx[art_id] for art_id in
+                                          sample_n_from_elements(cand_article_ids - set(test_impres), neg_sample_ratio)]
+                    candidate_articles.append(pos_test_sample)
+                    lbls = [0] * neg_sample_ratio + [1]  # create temp labels
+                    candidate_articles = list(zip(candidate_articles, lbls))  # zip art_id and label
+                    # random.shuffle(candidate_articles)  # shuffle article ids with corresponding label
+                    candidate_articles = np.array(candidate_articles)
 
-            for pos_test_sample in test_impres:
-                '''              
-                - Remove pos impressions from pool of cand articles
-                - Sample negative examples
-                - Add labels
-                - Shuffle zip(cands, lbls)            
-                - add samples to data dict            
-                '''
+                    # add data instance
+                    add_instance_to_data(data['test'], u_id2idx[u_id], hist_test, candidate_articles[:, 0], candidate_articles[:, 1])
 
-                #generate test candidates
-                ## sample candidates from articles in test interval
-                candidate_articles = [art_id2idx[art_id] for art_id in
-                                      sample_n_from_elements(cand_article_ids, neg_sample_ratio)]
-                candidate_articles.append(pos_test_sample)
-                lbls = [0] * neg_sample_ratio + [1]  # create temp labels
-                candidate_articles = list(zip(candidate_articles, lbls))  # zip art_id and label
-                #random.shuffle(candidate_articles)  # shuffle article ids with corresponding label
-                candidate_articles = np.array(candidate_articles)
+        elif 'pos_cut_off' == train_method:
+            u_id = u_id2idx[u_id]
 
+            train_samples = generate_target_hist_instance_pos_cutoff(u_id, train_impres, None,
+                                                                        cand_article_ids - set(train_impres),
+                                                                        art_id2idx, max_hist_len,
+                                                                        min_hist_len=5, mode="train")
+            # add train instances to data
+            for (u_id, hist, cands, lbls) in train_samples:
+                add_instance_to_data(data['train'], u_id, hist, cands, lbls)
+
+            if len(test_impres) != 0:
+                test_samples = generate_target_hist_instance_pos_cutoff(u_id, train_impres, test_impres,
+                                                                            cand_article_ids - set(test_impres),
+                                                                            art_id2idx, max_hist_len,
+                                                                            min_hist_len=5, mode="test")
                 # add test instance to data
-                candidates['test'].append(candidate_articles[:, 0]) # K+1 candidates
-                labels['test'].append(candidate_articles[:, 1])
+                for (u_id, hist, cands, lbls) in test_samples:
+                    add_instance_to_data(data['test'], u_id, hist, cands, lbls)
 
-                user_ids['test'].append(u_id2idx[u_id])
-                user_hist_pos['test'].append(hist_test)
+        elif 'masked_interests' == train_method:
+            raise NotImplementedError()
+        else:
+            raise KeyError()
+
+
+
 
     #
     #reformat to np int arrays
-    candidates['train'] = np.array(candidates['train'], dtype='int32')
-    labels['train'] = np.array(labels['train'], dtype='int32')
-    user_ids['train'] = np.array(user_ids['train'], dtype='int32')
-    user_hist_pos['train'] = np.array(user_hist_pos['train'], dtype='int32')
-
-    candidates['test'] = np.array(candidates['test'], dtype='int32')
-    labels['test'] = np.array(labels['test'], dtype='int32')
-    user_ids['test'] = np.array(user_ids['test'], dtype='int32')
-    user_hist_pos['test'] = np.array(user_hist_pos['test'], dtype='int32')
-
-    data = {}
-    data['train'] = [{'input': (u_id, hist, cands), 'labels': np.array(lbls)} for u_id, hist, cands, lbls
-                    in zip(user_ids['train'], user_hist_pos['train'], candidates['train'], labels['train'])]
-
-    data['test'] = [{'input': (u_id, hist, cands), 'labels': np.array(lbls)} for u_id, hist, cands, lbls
-                    in zip(user_ids['test'], user_hist_pos['test'], candidates['test'], labels['test'])]
+    # candidates['train'] = np.array(candidates['train'], dtype='int32')
+    # labels['train'] = np.array(labels['train'], dtype='int32')
+    # user_ids['train'] = np.array(user_ids['train'], dtype='int32')
+    # user_hist_pos['train'] = np.array(user_hist_pos['train'], dtype='int32')
+    #
+    # candidates['test'] = np.array(candidates['test'], dtype='int32')
+    # labels['test'] = np.array(labels['test'], dtype='int32')
+    # user_ids['test'] = np.array(user_ids['test'], dtype='int32')
+    # user_hist_pos['test'] = np.array(user_hist_pos['test'], dtype='int32')
+    #
+    #
+    # data['train'] = [{'input': (u_id, hist, cands), 'labels': np.array(lbls)} for u_id, hist, cands, lbls
+    #                 in zip(user_ids['train'], user_hist_pos['train'], candidates['train'], labels['train'])]
+    #
+    # data['test'] = [{'input': (u_id, hist, cands), 'labels': np.array(lbls)} for u_id, hist, cands, lbls
+    #                 in zip(user_ids['test'], user_hist_pos['test'], candidates['test'], labels['test'])]
 
     print("Train samples: {} \t Test: {}".format(len(data['train']), len(data['test'])))
 
@@ -365,7 +396,6 @@ def get_embeddings_from_pretrained(vocab, emb_path, emb_dim=300):
 
     except:
         print("Could not load word embeddings")
-
         return None
 
 def generate_batch_data_test(all_test_pn, all_label, all_test_id, batch_size, all_test_user_pos, news_words):
@@ -456,14 +486,18 @@ def get_labels_from_data(data):
         labels[entry_dict['u_id']] = entry_dict['labels']
     return labels
 
-def get_dpg_data_processed(data_path, neg_sample_ratio=4, max_hist_len=50, max_article_len=30, min_counts_for_vocab=2, load_prepped=False):
+def get_dpg_data_processed(data_path, train_method, neg_sample_ratio=4, max_hist_len=50, max_article_len=30, min_counts_for_vocab=2, load_prepped=False):
+
+    news_path = data_path + "news_prepped_" + train_method + ".pkl"
+    prepped_path = data_path + "news_prepped_" + train_method + ".pkl"
 
     if load_prepped:
         try:
-            with open(data_path + "news_prepped.pkl", 'rb') as fin:
+            #TODO: extend directory name with "train_method"
+            with open(news_path, 'rb') as fin:
                 (vocab, news_as_word_ids, art_id2idx) = pickle.load(fin)
 
-            with open(data_path + "data_prepped.pkl", 'rb') as fin:
+            with open(prepped_path, 'rb') as fin:
                 u_id2idx, data = pickle.load(fin)
 
             return data, vocab, news_as_word_ids, art_id2idx, u_id2idx
@@ -477,15 +511,15 @@ def get_dpg_data_processed(data_path, neg_sample_ratio=4, max_hist_len=50, max_a
                                                                    min_counts_for_vocab=min_counts_for_vocab,
                                                                    max_article_len=max_article_len)
 
-    with open(data_path + "news_prepped.pkl", 'wb') as fout:
+    with open(news_path, 'wb') as fout:
         pickle.dump((vocab, news_as_word_ids, art_id2idx), fout)
 
     path_user_data = data_path + "user_data.pkl"
 
-    u_id2idx, data = prep_dpg_user_file_wu(path_user_data, path_article_data, art_id2idx, test_interval_days=7,
-                                           neg_sample_ratio=neg_sample_ratio, max_hist_len=max_hist_len)
+    u_id2idx, data = prep_dpg_user_file(path_user_data, path_article_data, art_id2idx, train_method,
+                                        test_interval_days=7, neg_sample_ratio=neg_sample_ratio, max_hist_len=max_hist_len)
 
-    with open(data_path + "data_prepped.pkl", 'wb') as fout:
+    with open(prepped_path, 'wb') as fout:
         pickle.dump((u_id2idx, data), fout)
 
     return data, vocab, news_as_word_ids, art_id2idx, u_id2idx
@@ -641,7 +675,7 @@ def main(config):
         with open(config.data_path + "news_prepped.pkl", 'wb') as fout:
             pickle.dump((vocab, news_as_word_ids, art_id2idx), fout)
 
-        u_id2idx, data = prep_dpg_user_file_wu(config.user_data, set(art_id2idx.keys()), art_id2idx, neg_sample_ratio=config.neg_sample_ratio, max_hist_len=config.max_hist_len)
+        u_id2idx, data = prep_dpg_user_file(config.user_data, set(art_id2idx.keys()), art_id2idx, neg_sample_ratio=config.neg_sample_ratio, max_hist_len=config.max_hist_len)
 
         #idx2u_id = reverse_mapping_dict(u_id2idx)
         #idx2art_id = reverse_mapping_dict(art_id2idx)
@@ -658,8 +692,6 @@ def main(config):
     elif config.data_type == "NPA":
         config.data_path = "../datasets/NPA/"
         preprocess_user_file_wu(config.data_path)
-
-
 
 
 if __name__ == "__main__":
