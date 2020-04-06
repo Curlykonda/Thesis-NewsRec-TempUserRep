@@ -36,7 +36,7 @@ def sample_n_from_elements(elements, ratio):
         return random.sample(elements, ratio)
 
 
-def determine_n_samples(hist_len, n_max=10, max_hist_len=50, scale=0.08):
+def determine_n_samples(hist_len, n_max=20, max_hist_len=50, scale=0.065):
 
     #determine number of (training) instance depending on the history length
     if scale is None:
