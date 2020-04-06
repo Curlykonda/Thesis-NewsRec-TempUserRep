@@ -280,7 +280,7 @@ def main(config):
     # Get & prepare data
     # data is indexed by user_ids
     dataset, vocab, news_as_word_ids, art_id2idx, u_id2idx = get_dpg_data_processed(config.data_path, config.train_method, config.neg_sample_ratio,
-                                                                                    config.max_hist_len, config.max_news_len, load_prepped=False)
+                                                                                    config.max_hist_len, config.max_news_len, load_prepped=True)
     word_embeddings = get_embeddings_from_pretrained(vocab, emb_path=config.word_emb_path)
 
     train_data = dataset['train']
