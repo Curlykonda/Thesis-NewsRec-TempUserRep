@@ -246,9 +246,9 @@ def train_npa_actfunc(npa_model, criterion, optim, train_generator, act_func="so
                               compute_acc_tensors(y_probs_cpu, lbl_cpu),
                               roc_auc_score(lbl_cpu, y_probs_cpu),  # TPR v. FPR with varying threshold
                               average_precision_score(lbl_cpu, y_probs_cpu), # \text{AP} = \sum_n (R_n - R_{n-1}) P_n
-                              mrr_scores,
-                              ndcg5_scores,
-                              ndcg10_scores,
+                              np.mean(mrr_scores),
+                              np.mean(ndcg5_scores),
+                              np.mean(ndcg10_scores),
                               list(itertools.chain(*logits.detach().cpu().numpy())),
                               loss_l2.item(),
                               loss_total.item()
