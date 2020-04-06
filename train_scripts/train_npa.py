@@ -162,11 +162,25 @@ def test_eval_like_npa_wu(model, test_generator, act_func="sigmoid", one_candida
                 #break
                 pass
     loss, acc, raw_scores = (zip(*metrics_epoch))
+
+    metrics = defaultdict(list)
+    for u_id in click_scores:
+        preds = click_scores[u_id][0]
+        targets = click_scores[u_id][1]
+        metrics['auc'].append(roc_auc_score(targets, preds))
+        metrics['ap'].append(average_precision_score(targets, preds))
+        metrics['mrr'].append(mrr_score(targets, preds))
+        metrics['ndcg5'].append(ndcg_score(targets, preds, k=5))
+        metrics['ndcg10'].append(ndcg_score(targets, preds, k=10))
+
     metrics_epoch = [
         (np.mean(loss),
         np.mean(acc),
-        np.mean([roc_auc_score(click_scores[u_id][1], click_scores[u_id][0]) for u_id in click_scores]),
-        np.mean([average_precision_score(click_scores[u_id][1], click_scores[u_id][0]) for u_id in click_scores]),
+        np.mean(metrics['auc']),
+        np.mean(metrics['ap']),
+        np.mean(metrics['mrr']),
+        np.mean(metrics['ndcg5']),
+        np.mean(metrics['ndcg10']),
         list(itertools.chain(*raw_scores))
         )
     ]
@@ -209,14 +223,14 @@ def train_npa_actfunc(npa_model, criterion, optim, train_generator, act_func="so
             if loss_l2 is None:
                 loss_l2 = param.norm(2)
             else:
-                loss_l2 += param.norm(2)
+                loss_l2 = loss_l2 + param.norm(2)
 
-        #loss_l2 *= config.lambda_l2
-        #loss = loss_bce + loss_l2
+        loss_l2 = loss_l2 * config.lambda_l2
+        loss_total = loss_bce + loss_l2
 
         # optimiser backward
         optim.zero_grad()
-        loss_bce.backward()
+        loss_total.backward()
         # torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=config.max_norm)
         optim.step()
 
@@ -224,16 +238,23 @@ def train_npa_actfunc(npa_model, criterion, optim, train_generator, act_func="so
         lbl_cpu = lbls.cpu()
         y_probs_cpu = y_probs.detach().cpu()
 
-        # TODO: add MRR and NDCG@k
+
+        mrr_scores, ndcg5_scores, ndcg10_scores = zip(*[(mrr_score(lbl, pred), ndcg_score(lbl, pred, k=5), ndcg_score(lbl, pred, k=10))
+                                                        for lbl, pred in zip(lbl_cpu.numpy(), y_probs_cpu.detach().numpy())])
+
         metrics_epoch.append((loss_bce.item(),
                               compute_acc_tensors(y_probs_cpu, lbl_cpu),
                               roc_auc_score(lbl_cpu, y_probs_cpu),  # TPR v. FPR with varying threshold
                               average_precision_score(lbl_cpu, y_probs_cpu), # \text{AP} = \sum_n (R_n - R_{n-1}) P_n
+                              mrr_scores,
+                              ndcg5_scores,
+                              ndcg10_scores,
                               list(itertools.chain(*logits.detach().cpu().numpy())),
-                              loss_l2.item()
+                              loss_l2.item(),
+                              loss_total.item()
                               ))
 
-        if device.type == 'cpu' and i_batch > 0: #
+        if device.type == 'cpu': #and i_batch > 0: #
             print("Stopped after {} batches".format(i_batch + 1))
             break
     return metrics_epoch
@@ -304,7 +325,7 @@ def main(config):
     #Adam(params, lr=0.001, betas=(0.9, 0.999), eps=1e-08, weight_decay=0, amsgrad=False) default
 
     print(device)
-    print_setting(config, ['random_seed', 'train_method', 'eval_method', 'weight_decay', 'train_act_func', 'test_act_func', 'data_path'])
+    print_setting(config, ['random_seed', 'train_method', 'eval_method', 'weight_decay', 'lambda_l2', 'train_act_func', 'test_act_func', 'data_path'])
 
     # create dir for logging
     now = datetime.now()
@@ -389,14 +410,14 @@ def map_round_tensor(tensor, decimals=3, idx=0):
 
 def log_metrics(epoch, metrics_epoch, metrics, writer, mode='train', method='epoch'):
 
-    keys = ['loss', 'acc', 'auc', 'ap', 'loss_l2']
+    keys = ['loss', 'acc', 'auc', 'ap', 'mrr', 'ndcg5', 'ndcg10', 'loss_l2', 'loss_total']
 
     if mode =='train':
-        loss, acc, auc, ap, logits, loss_l2 = (zip(*metrics_epoch))
-        stats = (loss, acc, auc, ap, loss_l2)
+        loss, acc, auc, ap, mrr, ndcg5, ndcg10, logits, loss_l2, loss_total = (zip(*metrics_epoch))
+        stats = (loss, acc, auc, ap, mrr, ndcg5, ndcg10, loss_l2, loss_total)
     else:
-        loss, acc, auc, ap, logits = (zip(*metrics_epoch))
-        stats = (loss, acc, auc, ap)
+        loss, acc, auc, ap, mrr, ndcg5, ndcg10, logits = (zip(*metrics_epoch))
+        stats = (loss, acc, auc, ap, mrr, ndcg5, ndcg10)
 
     for i, val in enumerate(stats):
         if method == 'epoch':
