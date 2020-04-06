@@ -83,7 +83,7 @@ class NPA_wu(nn.Module):
         self.pref_q_article = PrefQueryWu(self.dim_pref_q, self.dim_emb_user_id)
 
         self.interest_extractor = (None if interest_extractor is None
-                                   else GRU_interest(self.dim_news_rep, self.dim_user_rep, self.max_hist_len))
+                                   else GRU_interest(self.dim_news_rep, self.dim_user_rep, self.max_hist_len, self.device))
 
         self.user_encoder = (PersonalisedAttentionWu(emb_dim_pref_query, self.dim_news_rep)
                              if user_encoder is None else user_encoder)

@@ -4,12 +4,13 @@ import torch.functional as F
 
 
 class GRU(nn.Module):
-    def __init__(self, input_size, hidden_size, n_layers):
+    def __init__(self, input_size, hidden_size, n_layers, device):
         super(GRU, self).__init__()
 
         self.input_size = input_size
         self.hidden_size = hidden_size
         self.n_layers = n_layers
+        self.device = device
 
         self.output = None
         self.h_n = None
@@ -19,7 +20,7 @@ class GRU(nn.Module):
     def forward(self, input, h0=None, **kwargs):
         if h0 is None:
             b = input.shape[0]
-            h0 = torch.zeros(b, self.hidden_size)
+            h0 = torch.zeros(b, self.hidden_size, device=self.device)
 
         output = []
         h_x = h0
