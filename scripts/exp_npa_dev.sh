@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --job-name=exp_npa_dev
-#SBATCH -n 4
-#SBATCH -t 02:00:00
+#SBATCH -n 8
+#SBATCH -t 08:00:00
 #SBATCH -p gpu_shared
 #SBATCH --gres=gpu:1
 #SBATCH --mem=60000M
@@ -19,22 +19,50 @@ cd $workdir/train_scripts
 
 python --version
 
+datapath="../datasets/dpg/dev_time_split/"
+embeddings="../embeddings/cc.nl.300.bin"
+
 for SEED in {42..45}
 do
+  #1
+  python -u train_npa.py --data_path=$datapath --word_emb_path=$embeddings --exp_name="dev_wu" --train_method="wu" \
+    --random_seed=$SEED
+  #2
+  python -u train_npa.py --data_path=$datapath --word_emb_path=$embeddings --exp_name="dev_cut" --train_method="pos_cut_off" \
+    --random_seed=$SEED --test_act_func="softmax"
+  #3a
+  python -u train_npa.py --data_path=$datapath --word_emb_path=$embeddings --exp_name="dev_wu_l2-5e3" --train_method="wu" \
+    --random_seed=$SEED --lambda_l2=0.005 --test_act_func="softmax"
 
-  python -u train_npa.py --data_path="../datasets/dpg/dev_time_split/" --word_emb_path="../embeddings/cc.nl.300.bin" --exp_name="dev" --random_seed=$SEED
+  #4a
+  python -u train_npa.py --data_path=$datapath --word_emb_path=$embeddings --exp_name="dev_cut_l2-5e3" --train_method="pos_cut_off" \
+    --random_seed=$SEED --lambda_l2=0.005 --test_act_func="softmax"
+  #4b
+  python -u train_npa.py --data_path=$datapath --word_emb_path=$embeddings --exp_name="dev_cut_l2-5e4" --train_method="pos_cut_off" \
+    --random_seed=$SEED --lambda_l2=0.0005 --test_act_func="softmax"
+  #4c
+  python -u train_npa.py --data_path=$datapath --word_emb_path=$embeddings --exp_name="dev_cut_l2-2e3" --train_method="pos_cut_off" \
+    --random_seed=$SEED --lambda_l2=0.0025 --test_act_func="softmax"
 
-  python -u train_npa.py --data_path="../datasets/dpg/dev_time_split/" --word_emb_path="../embeddings/cc.nl.300.bin" --exp_name="dev-softm" \
-                    --eval_method="custom" --train_act_func="softmax" --test_act_func="softmax" --random_seed=$SEED
+  #5a
+  python -u train_npa.py --data_path=$datapath --word_emb_path=$embeddings --exp_name="dev_wu_gru" --train_method="wu" \
+    --random_seed=$SEED --interest_extractor="gru" --test_act_func="softmax"
 
-  python -u train_npa.py --data_path="../datasets/dpg/dev_time_split/" --word_emb_path="../embeddings/cc.nl.300.bin" --exp_name="dev-sig" \
-                    --eval_method="custom" --train_act_func="sigmoid" --test_act_func="sigmoid" --random_seed=$SEED
+  #6a
+  python -u train_npa.py --data_path=$datapath --word_emb_path=$embeddings --exp_name="dev_cut_gru" --train_method="pos_cut_off" \
+    --random_seed=$SEED --interest_extractor="gru" --test_act_func="softmax"
 
-  python -u train_npa.py --data_path="../datasets/dpg/dev_time_split/" --word_emb_path="../embeddings/cc.nl.300.bin" --weight_decay=0.00001 --exp_name="dev-wd1e5" --eval_method="custom" --random_seed=$SEED
+  #7a
+  python -u train_npa.py --data_path=$datapath --word_emb_path=$embeddings --exp_name="dev_cut_gru_l2-5e3" --train_method="pos_cut_off" \
+    --random_seed=$SEED --interest_extractor="gru" --lambda_l2=0.005 --test_act_func="softmax"
 
-  python -u train_npa.py --data_path="../datasets/dpg/dev_time_split/" --word_emb_path="../embeddings/cc.nl.300.bin" --weight_decay=0.0001 --exp_name="dev-wd1e4" --eval_method="custom" --random_seed=$SEED
+  #7b
+  python -u train_npa.py --data_path=$datapath --word_emb_path=$embeddings --exp_name="dev_cut_gru_l2-5e4" --train_method="pos_cut_off" \
+    --random_seed=$SEED --interest_extractor="gru" --lambda_l2=0.0005 --test_act_func="softmax"
 
-  python -u train_npa.py --data_path="../datasets/dpg/dev_time_split/" --word_emb_path="../embeddings/cc.nl.300.bin" --weight_decay=0.001 --exp_name="dev-wd1e3" --eval_method="custom" --random_seed=$SEED
+  #7c
+  python -u train_npa.py --data_path=$datapath --word_emb_path=$embeddings --exp_name="dev_cut_gru_l2-2e3" --train_method="pos_cut_off" \
+    --random_seed=$SEED --interest_extractor="gru" --lambda_l2=0.0025 --test_act_func="softmax"
 
 done
 #python -u train_npa.py --data_path="../datasets/dpg/dev/" --word_emb_path="../embeddings/cc.nl.300.bin" --weight_decay=0.0001 --test_w_one=1 --random_seed=13 --exp_name="dev-wd"
