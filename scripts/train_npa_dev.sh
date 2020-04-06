@@ -21,10 +21,11 @@ python --version
 
 #srun -n 2 -t 00:30:00 --pty bash -il
 
-datapath="../datasets/dpg/dev/"
+datapath="../datasets/dpg/dev_time_split/"
 embeddings="../embeddings/cc.nl.300.bin"
 
-python -u train_npa.py --data_path=$datapath --word_emb_path=$embeddings --exp_name="dev-no-split"
+python -u train_npa.py --data_path=$datapath --word_emb_path=$embeddings --exp_name="dev" --train_method="wu"
+python -u train_npa.py --data_path=$datapath --word_emb_path=$embeddings --exp_name="dev_cut" --train_method="pos_cut_off"
 
 #python -u train_npa.py --data_path="../datasets/dpg/dev_time_split/" --word_emb_path="../embeddings/cc.nl.300.bin" --exp_name="dev-softm" \
 #                  --eval_method="custom" --train_act_func="softmax" --test_act_func="softmax"
