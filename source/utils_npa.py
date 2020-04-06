@@ -36,7 +36,7 @@ def sample_n_from_elements(elements, ratio):
         return random.sample(elements, ratio)
 
 
-def determine_n_samples(hist_len, n_max=20, max_hist_len=50, scale=0.065):
+def determine_n_samples(hist_len, n_max=20, max_hist_len=50, scale=0.08):
 
     #determine number of (training) instance depending on the history length
     if scale is None:
@@ -489,11 +489,10 @@ def get_labels_from_data(data):
 def get_dpg_data_processed(data_path, train_method, neg_sample_ratio=4, max_hist_len=50, max_article_len=30, min_counts_for_vocab=2, load_prepped=False):
 
     news_path = data_path + "news_prepped_" + train_method + ".pkl"
-    prepped_path = data_path + "news_prepped_" + train_method + ".pkl"
+    prepped_path = data_path + "data_prepped_" + train_method + ".pkl"
 
     if load_prepped:
         try:
-            #TODO: extend directory name with "train_method"
             with open(news_path, 'rb') as fin:
                 (vocab, news_as_word_ids, art_id2idx) = pickle.load(fin)
 
