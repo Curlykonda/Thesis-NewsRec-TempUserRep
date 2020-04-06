@@ -418,7 +418,7 @@ def log_metrics(epoch, metrics_epoch, metrics, writer, mode='train', method='epo
     writer.add_histogram("logits/" + mode, np.array(logits), epoch)
     # -> expect that logits widely distributed in the beginning but become more concentrated around certain high & low points
 
-    writer.close()
+    #writer.close()
     return metrics
 
 
