@@ -451,9 +451,9 @@ if __name__ == "__main__":
 
     # input data
     parser.add_argument('--data_type', type=str, default='DPG', help='options for data format: DPG, NPA or Adressa ')
-    parser.add_argument('--data_path', type=str, default='../datasets/dpg/dev_time_split/', help='path to data directory') # dev : i10k_u5k_s30/
-    parser.add_argument('--word_emb_path', type=str, default='../embeddings/glove_eng.840B.300d.txt',
-                        help='path to directory with word embeddings')
+    parser.add_argument('--data_path', type=str, default='../datasets/dpg/dev_time_split_interactions/', help='path to data directory') # dev : i10k_u5k_s30/
+    parser.add_argument('--word_emb_path', type=str, default='../embeddings/glove_eng.840B.300d.txt', help='path to directory with word embeddings')
+    parser.add_argument('--load_prep_data', type=bool, default=True, help="use existing, pre-processed data")
 
     # preprocessing
     parser.add_argument('--max_hist_len', type=int, default=50,
@@ -464,7 +464,7 @@ if __name__ == "__main__":
                         help='Negative sample ratio N: for each positive impression generate N negative samples')
     parser.add_argument('--candidate_generation', type=str, default='neg_sampling',
                         help='Method to generate candidate articles: [neg_sampling, neg_sampling_time]')
-    parser.add_argument('--train_method', type=str, default='pos_cut_off',
+    parser.add_argument('--train_method', type=str, default='wu',
                         help='Method for network training & format of training samples: [wu, pos_cut_off, masked_interests]')
 
     #model params
@@ -474,7 +474,7 @@ if __name__ == "__main__":
     #training
     parser.add_argument('--batch_size', type=int, default=100, help='batch size for training')
     parser.add_argument('--n_epochs', type=int, default=10, help='Epoch number for training')
-    parser.add_argument('--lambda_l2', type=float, default=0.0005, help='Parameter to control L2 loss')
+    parser.add_argument('--lambda_l2', type=float, default=0.0, help='Parameter to control L2 loss')
 
     parser.add_argument('--train_act_func', type=str, default='softmax',
                         help='Output activation func Training: [softmax, sigmoid]')
@@ -492,7 +492,7 @@ if __name__ == "__main__":
     #logging
     parser.add_argument('--results_path', type=str, default='../results/', help='path to save metrics')
     parser.add_argument('--exp_name', type=str, default='dev',
-                        help='Addition to experiment name for logging, e.g. size of dataset [small, large]')
+                        help='Addition to experiment name for logging, e.g. size of dataset [dev, med, large]')
 
     config = parser.parse_args()
 
