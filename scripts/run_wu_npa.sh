@@ -26,12 +26,12 @@ embeddings="../embeddings/cc.nl.300.bin"
 train="wu"
 eval="wu"
 interest_extractor="None"
-SEED=113
+SEEDS=(42, 113, 1337, 264)
 
-#for SEED in 43
-#do
+for SEED in $SEEDS
+do
   #1
-python -u train_npa.py --data_path=$datapath --word_emb_path=$embeddings --exp_name="vanilla_npa" \
-  --npa_variant="vanilla" --random_seed=$SEED
-
-#done
+#python -u train_npa.py --data_path=$datapath --word_emb_path=$embeddings --exp_name="med_vanilla_npa" \
+#  --npa_variant="vanilla" --random_seed=$SEED --n_epochs=15
+  echo $SEED
+done
