@@ -21,7 +21,7 @@ python --version
 
 #srun -n 2 -t 00:30:00 --pty bash -il
 
-datapath="../datasets/dpg/medium_time_split/"
+datapath="../datasets/dpg/medium_time_split_interactions/"
 embeddings="../embeddings/cc.nl.300.bin"
 train="wu"
 eval="wu"
