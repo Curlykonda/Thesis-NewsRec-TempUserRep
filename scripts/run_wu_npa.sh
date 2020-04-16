@@ -21,18 +21,17 @@ python --version
 
 #srun -n 2 -t 00:30:00 --pty bash -il
 
-datapath="../datasets/dpg/medium_time_split_interactions/"
+datapath="../datasets/dpg/dev_time_split_interactions/"
 embeddings="../embeddings/cc.nl.300.bin"
 train="wu"
 eval="wu"
 interest_extractor="None"
+SEED=113
 
-for SEED in {42..46}
-do
+#for SEED in 43
+#do
   #1
-  python -u train_npa.py --data_path=$datapath --word_emb_path=$embeddings --exp_name="van_npa" --train_method=$train \
-    --eval_method=$eval --random_seed=$SEED --interest_extractor=$interest_extractor \
-    --max_hist_len=50 --max_news_len=30 --candidate_generation="neg_sampling" --neg_sample_ratio=4 \
-    --lambda_l2=0 --n_epochs=20
+python -u train_npa.py --data_path=$datapath --word_emb_path=$embeddings --exp_name="vanilla_npa" \
+  --npa_variant="vanilla" --random_seed=$SEED
 
-done
+#done
