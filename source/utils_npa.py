@@ -133,7 +133,7 @@ def get_hyper_model_params(config):
                     }
 
     hyper_params['vanilla-NPA'] = {'random_seed': config.random_seed,
-                           'lr': 0.01, 'neg_sample_ratio': 4, 'batch_size': 100,
+                           'lr': 0.001, 'neg_sample_ratio': 4, 'batch_size': 100,
                            'lambda_l2': 0, 'weight_decay': 0,
                            'train_act_func': "softmax", 'test_act_func': "sigmoid",
                            'n_epochs': 20, 'data_type': config.data_type
@@ -145,8 +145,10 @@ def get_hyper_model_params(config):
     model_params['vanilla-NPA'] = {'dim_user_id': 50, 'dim_pref_query': 200, 'dim_words': 300,
                                     'max_title_len': 30, 'max_hist_len': 50,
                                    'interest_extractor': None}
-
-    return hyper_params, model_params
+    if "vanilla" == config.npa_variant:
+        return hyper_params['vanilla-NPA'], model_params['vanilla-NPA']
+    else:
+        return hyper_params['now'], model_params['now']
 
 def prep_dpg_user_file(user_file, news_file, art_id2idx, train_method, test_interval_days : int, neg_sample_ratio=4, max_hist_len=50, preserve_seq=False):
     '''
