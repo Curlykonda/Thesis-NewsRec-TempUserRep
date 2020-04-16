@@ -22,7 +22,7 @@ sys.path.append("..")
 
 from source.my_datasets import DPG_Dataset
 from source.models.NPA import NPA_wu, init_weights
-from source.utils_npa import get_dpg_data_processed, get_embeddings_from_pretrained
+from source.utils_npa import get_dpg_data_processed, get_embeddings_from_pretrained, get_hyper_model_params
 from source.utils import print_setting, save_metrics_as_pickle, save_config_as_json, create_exp_name, save_exp_name_label
 from source.metrics import *
 
@@ -265,12 +265,7 @@ def main(config):
     # set device
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
-    hyper_params = {'random_seed': config.random_seed,
-                    'lr': config.lr, 'neg_sample_ratio': config.neg_sample_ratio, 'batch_size': config.batch_size,
-                    'lambda_l2': config.lambda_l2, 'weight_decay': config.weight_decay,
-                    'train_act_func': config.train_act_func, 'test_act_func': config.test_act_func,
-                    'n_epochs': config.n_epochs, 'data_type': config.data_type
-                    }
+    hyper_params, model_params = get_hyper_model_params(config)
 
     #set random seeds
     torch.manual_seed(config.random_seed)
@@ -297,17 +292,16 @@ def main(config):
 
     print("Train on {} samples".format(train_dataset.__len__()))
     #
+    ###############################################################################
     # build model
     #
-    model_params = {'n_users': len(dataset['train'])+len(dataset['test']), 'vocab_len': len(vocab),
-                    'dim_user_id': 50, 'dim_pref_query': 200, 'dim_words': 300,
-                    'max_title_len': config.max_hist_len, 'device': device,
-                    'interest_extractor': config.interest_extractor}
-
-    npa_model = NPA_wu(n_users=len(dataset['train'])+len(dataset['test']), vocab_len=len(vocab), pretrained_emb=word_embeddings,
-                       emb_dim_user_id=50, emb_dim_pref_query=200, emb_dim_words=300,
-                       max_news_len=config.max_news_len, max_hist_len=config.max_hist_len,
-                       device=device, interest_extractor=config.interest_extractor)
+    if config.npa_variant == "vanilla":
+        npa_model = NPA_wu(n_users=len(dataset['train'])+len(dataset['test']), vocab_len=len(vocab),
+                           pretrained_emb=word_embeddings, device=device)
+    else:
+        npa_model = NPA_wu(n_users=len(dataset['train'])+len(dataset['test']), vocab_len=len(vocab),
+                           pretrained_emb=word_embeddings, device=device,
+                           **model_params['now'])
     npa_model.to(device)
     #
     #npa_model.apply(init_weights)
@@ -468,8 +462,12 @@ if __name__ == "__main__":
                         help='Method for network training & format of training samples: [wu, pos_cut_off, masked_interests]')
 
     #model params
-    parser.add_argument('--interest_extractor', type=str, default=None,
-                        help='[None, gru]')
+    parser.add_argument('--npa_variant', type=str, default=None, help='[vanilla, custom]')
+    parser.add_argument('--news_encoder', type=str, default=None, help='[wu_cnn, kim_cnn, gru, bert, sum, avg_sum]')
+    parser.add_argument('--user_encoder', type=str, default=None, help='[None, pers_attn, gru, bert, avg_sum]')
+
+    parser.add_argument('--interest_extractor', type=str, default=None, help='[None, gru]')
+
 
     #training
     parser.add_argument('--batch_size', type=int, default=100, help='batch size for training')
