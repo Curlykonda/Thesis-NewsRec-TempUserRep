@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --job-name=run_wu_npa
 #SBATCH -n 4
-#SBATCH -t 03:00:00
+#SBATCH -t 12:00:00
 #SBATCH -p gpu_shared
 #SBATCH --gres=gpu:1
 #SBATCH --mem=60000M
@@ -21,17 +21,17 @@ python --version
 
 #srun -n 2 -t 00:30:00 --pty bash -il
 
-datapath="../datasets/dpg/dev_time_split_interactions/"
+datapath="../datasets/dpg/medium_time_split_interactions/"
 embeddings="../embeddings/cc.nl.300.bin"
 train="wu"
 eval="wu"
 interest_extractor="None"
-SEEDS=(42, 113, 1337, 264)
+#SEEDS=(42, 113, 1337, 264)
 
-for SEED in $SEEDS
+for SEED in {42..46}
 do
   #1
-#python -u train_npa.py --data_path=$datapath --word_emb_path=$embeddings --exp_name="med_vanilla_npa" \
-#  --npa_variant="vanilla" --random_seed=$SEED --n_epochs=15
+  python -u train_npa.py --data_path=$datapath --word_emb_path=$embeddings --exp_name="med_vanilla_npa" \
+    --npa_variant="vanilla" --random_seed=$SEED --n_epochs=15
   echo $SEED
 done
