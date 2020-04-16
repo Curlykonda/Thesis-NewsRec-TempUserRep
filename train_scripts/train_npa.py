@@ -159,8 +159,8 @@ def test_eval_like_npa_wu(model, test_generator, act_func="sigmoid", one_candida
 
             # precision, recall, thresholds = precision_recall_curve(y_true, y_scores)
             if device.type == 'cpu':
-                #break
-                pass
+                break
+                #pass
     loss, acc, raw_scores = (zip(*metrics_epoch))
 
     metrics = defaultdict(list)
@@ -301,7 +301,7 @@ def main(config):
     else:
         npa_model = NPA_wu(n_users=len(dataset['train'])+len(dataset['test']), vocab_len=len(vocab),
                            pretrained_emb=word_embeddings, device=device,
-                           **model_params['now'])
+                           **model_params)
     npa_model.to(device)
     #
     #npa_model.apply(init_weights)
@@ -372,10 +372,10 @@ def main(config):
         metrics_test = log_metrics(epoch, metrics_epoch, metrics_test, writer, mode='test', method=config.log_method)
 
         print("\n {} epoch".format(epoch))
-        print("TRAIN: BCE loss {:1.3f} \t acc {:0.3f} \t auc {:0.3f} \t ap {:0.3f} \t L2 loss: {:0.3f} in {:0.1f}s".format(
-                metrics_train['loss'][-1], metrics_train['acc'][-1], metrics_train['auc'][-1], metrics_train['ap'][-1], metrics_train['loss_l2'][-1], (t1-t0)))
-        print("TEST: BCE loss {:1.3f}  \t acc {:0.3f} \t auc {:0.3f} \t ap {:0.3f} in {:0.1f}s".format(
-                metrics_test['loss'][-1], metrics_test['acc'][-1], metrics_test['auc'][-1], metrics_test['ap'][-1], (t2-t1)))
+        print("TRAIN: BCE loss {:1.3f} \t acc {:0.3f} \t auc {:0.3f} \t ap {:0.3f} \t L2 loss: {:0.3f} in {:0.1f} min".format(
+                metrics_train['loss'][-1], metrics_train['acc'][-1], metrics_train['auc'][-1], metrics_train['ap'][-1], metrics_train['loss_l2'][-1], (t1-t0)/60))
+        print("TEST: BCE loss {:1.3f}  \t acc {:0.3f} \t auc {:0.3f} \t ap {:0.3f} in {:0.1f} min".format(
+                metrics_test['loss'][-1], metrics_test['acc'][-1], metrics_test['auc'][-1], metrics_test['ap'][-1], (t2-t1)/60))
 
         print(eval_msg)
 
@@ -462,7 +462,7 @@ if __name__ == "__main__":
                         help='Method for network training & format of training samples: [wu, pos_cut_off, masked_interests]')
 
     #model params
-    parser.add_argument('--npa_variant', type=str, default=None, help='[vanilla, custom]')
+    parser.add_argument('--npa_variant', type=str, default='vanilla', help='[vanilla, custom]')
     parser.add_argument('--news_encoder', type=str, default=None, help='[wu_cnn, kim_cnn, gru, bert, sum, avg_sum]')
     parser.add_argument('--user_encoder', type=str, default=None, help='[None, pers_attn, gru, bert, avg_sum]')
 
