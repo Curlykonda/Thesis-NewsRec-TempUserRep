@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --job-name=run_wu_npa
 #SBATCH -n 4
-#SBATCH -t 01:00:00
+#SBATCH -t 03:00:00
 #SBATCH -p gpu_shared
 #SBATCH --gres=gpu:1
 #SBATCH --mem=60000M
