@@ -221,7 +221,7 @@ def train_npa_actfunc(npa_model, criterion, optim, train_generator, act_func="so
             ap = np.mean(ap)
 
         # gini coefficient
-        gini = 2*auc - 1 # normalize AUC: random classifier scores 0, and a perfect one scores 1
+        #gini = 2*auc - 1 # normalize AUC: random classifier scores 0, and a perfect one scores 1
 
         metrics_epoch.append((loss_bce.item(),
                               compute_acc_tensors(y_probs.cpu(), lbls.cpu()),
