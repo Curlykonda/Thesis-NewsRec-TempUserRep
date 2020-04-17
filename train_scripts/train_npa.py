@@ -49,46 +49,7 @@ def try_var_loss_funcs(logits, targets, i_batch):
     print("CE softm {0:.3f} \t sigmoid {0:.3f}".format(ce(softm_probs, targets.argmax(dim=1)), ce(log_softm_probs, targets.argmax(dim=1))))
     print("NLL softm {0:.3f} \t log softm {0:.3f}".format(nll(softm_probs, targets.argmax(dim=1)), nll(log_softm_probs, targets.argmax(dim=1))))
 
-def test_eval_npa_softmax(model, test_generator):
-
-    # difference: select a single cand-target pair + sigmoid activation
-    metrics_epoch = []
-    model.eval()
-    device = torch.device(model.device)
-
-    with torch.no_grad():
-        for sample in test_generator:
-            user_ids, brows_hist, candidates = sample['input']
-            lbls = sample['labels']
-            lbls = lbls.float().to(device)
-            # sub sample single candidate + label for inference
-
-            # forward pass
-            logits = model(user_ids.long().to(device), brows_hist.long().to(device),
-                           candidates.long().to(device))
-
-            y_probs = torch.nn.functional.softmax(logits, dim=1)
-            y_probs_cpu = y_probs.detach().cpu()
-            # compute loss
-            test_loss = nn.BCELoss()(y_probs, lbls)
-
-            metrics_epoch.append((test_loss.item(),
-                                  compute_acc_tensors(y_probs_cpu, lbls.cpu()),
-                                  roc_auc_score(lbls.cpu(), y_probs_cpu),
-                                  average_precision_score(lbls.cpu(), y_probs_cpu)))
-
-            # precision, recall, thresholds = precision_recall_curve(y_true, y_scores)
-
-            if device.type == 'cpu':
-                break
-    idx = 5
-    tgts = lbls[idx].cpu().numpy().tolist()
-    eval_str = ("\nLogits {} \nSigm p {} \nTargets {}".format(
-        map_round_tensor(logits, idx=idx), map_round_tensor(y_probs, idx=idx), tgts))
-
-    return metrics_epoch, eval_str
-
-def test_eval_like_npa_wu(model, test_generator, act_func="sigmoid", one_candidate=False):
+def test_npa_act_func(model, test_generator, act_func="sigmoid"):
     '''
     Tests the model performance on an unseen test set. Method follows the functionality of the original NPA implementation.
     One testing instance should feature a mixed set of impressions, with positive and negative labels. The testing case described by the authors,
@@ -108,18 +69,17 @@ def test_eval_like_npa_wu(model, test_generator, act_func="sigmoid", one_candida
     device = torch.device(model.device)
 
     click_scores = defaultdict(list)
-    loss_epoch = []
-    acc = []
 
     with torch.no_grad():
         for sample in test_generator:
             user_ids, brows_hist, candidates = sample['input']
             lbls = sample['labels']
             lbls = lbls.float().to(device)
+
             # sub sample single candidate + label for inference
-            if one_candidate:
-                candidates = candidates[:, 1].unsqueeze(1)
-                lbls = lbls[:, 1]
+            # if one_candidate:
+            #     candidates = candidates[:, 1].unsqueeze(1)
+            #     lbls = lbls[:, 1]
 
             # forward pass
             logits = model(user_ids.long().to(device), brows_hist.long().to(device),
@@ -127,10 +87,13 @@ def test_eval_like_npa_wu(model, test_generator, act_func="sigmoid", one_candida
             if len(logits.shape) < 2:  # cover border cases for batch size = 1
                 logits = logits.unsqueeze(0)
 
-            if act_func == "sigmoid":
+            if "sigmoid" == act_func:
                 y_probs = torch.sigmoid(logits)
-            else:
+            elif "softmax" == act_func:
                 y_probs = torch.nn.functional.softmax(logits, dim=1)
+            else:
+                raise NotImplementedError()
+
             y_probs_cpu = y_probs.detach().cpu()
 
             # compute loss
@@ -186,10 +149,8 @@ def test_eval_like_npa_wu(model, test_generator, act_func="sigmoid", one_candida
     ]
 
     idx = min(5, lbls.shape[0]-1)
-    if one_candidate:
-        tgts = lbls[:idx].cpu().numpy().tolist()
-    else:
-        tgts = lbls[idx].cpu().numpy().tolist()
+
+    tgts = lbls[idx].cpu().numpy().tolist()
     eval_str = ("\nLogits {} \nProbs {} \nTargets {}".format(
         map_round_tensor(logits, idx=idx), map_round_tensor(y_probs, idx=idx), tgts))
 
@@ -210,10 +171,12 @@ def train_npa_actfunc(npa_model, criterion, optim, train_generator, act_func="so
         logits = npa_model(user_ids.long().to(device), brows_hist.long().to(device), candidates.long().to(device))
 
         # activation function
-        if act_func == "sigmoid":
+        if "sigmoid" == act_func:
             y_probs = torch.sigmoid(logits)
-        else:
+        elif "softmax" == act_func:
             y_probs = torch.nn.functional.softmax(logits, dim=1)
+        else:
+            raise NotImplementedError()
 
         # compute loss
         loss_bce = criterion(y_probs, lbls)
@@ -225,8 +188,11 @@ def train_npa_actfunc(npa_model, criterion, optim, train_generator, act_func="so
             else:
                 loss_l2 = loss_l2 + param.norm(2)
 
-        loss_l2 = loss_l2 * config.lambda_l2
-        loss_total = loss_bce + loss_l2
+        if 0 < config.lambda_l2:
+            loss_l2 = loss_l2 * config.lambda_l2
+            loss_total = loss_bce + loss_l2
+        else:
+            loss_total = loss_bce
 
         # optimiser backward
         optim.zero_grad()
@@ -238,6 +204,8 @@ def train_npa_actfunc(npa_model, criterion, optim, train_generator, act_func="so
         lbl_cpu = lbls.cpu()
         y_probs_cpu = y_probs.detach().cpu()
 
+        u_rep_norm = torch.mean(torch.norm(npa_model.user_rep, p=2, dim=1))
+        cand_rep_norm = torch.mean(torch.norm(npa_model.candidate_reps, p=2, dim=1))
 
         mrr_scores, ndcg5_scores, ndcg10_scores = zip(*[(mrr_score(lbl, pred), ndcg_score(lbl, pred, k=5), ndcg_score(lbl, pred, k=10))
                                                         for lbl, pred in zip(lbl_cpu.numpy(), y_probs_cpu.detach().numpy())])
@@ -251,7 +219,9 @@ def train_npa_actfunc(npa_model, criterion, optim, train_generator, act_func="so
                               np.mean(ndcg10_scores),
                               list(itertools.chain(*logits.detach().cpu().numpy())),
                               loss_l2.item(),
-                              loss_total.item()
+                              loss_total.item(),
+                              u_rep_norm,
+                              cand_rep_norm
                               ))
 
         if device.type == 'cpu': #and i_batch > 0: #
@@ -360,10 +330,10 @@ def main(config):
         #evaluate on test set
         ###############################
         if config.eval_method == 'wu':
-            metrics_epoch, eval_msg = test_eval_like_npa_wu(npa_model, test_generator)
+            metrics_epoch, eval_msg = test_npa_act_func(npa_model, test_generator)
         elif config.eval_method == 'custom':
-            metrics_epoch, eval_msg = test_eval_like_npa_wu(npa_model, test_generator, act_func=config.test_act_func,
-                                                            one_candidate=config.test_w_one)
+            metrics_epoch, eval_msg = test_npa_act_func(npa_model, test_generator, act_func=config.test_act_func,
+                                                        one_candidate=config.test_w_one)
         else:
             raise KeyError("{} is no valid evluation method".format(config.eval_method))
 
@@ -404,11 +374,12 @@ def map_round_tensor(tensor, decimals=3, idx=0):
 
 def log_metrics(epoch, metrics_epoch, metrics, writer, mode='train', method='epoch'):
 
-    keys = ['loss', 'acc', 'auc', 'ap', 'mrr', 'ndcg5', 'ndcg10', 'loss_l2', 'loss_total']
+    keys = ['loss', 'acc', 'auc', 'ap', 'mrr', 'ndcg5', 'ndcg10', 'loss_l2', 'loss_total',
+            'u_rep_norm', 'cand_rep_norm']
 
     if mode =='train':
-        loss, acc, auc, ap, mrr, ndcg5, ndcg10, logits, loss_l2, loss_total = (zip(*metrics_epoch))
-        stats = (loss, acc, auc, ap, mrr, ndcg5, ndcg10, loss_l2, loss_total)
+        loss, acc, auc, ap, mrr, ndcg5, ndcg10, logits, loss_l2, loss_total, u_rep_norm, cand_rep_norm = (zip(*metrics_epoch))
+        stats = (loss, acc, auc, ap, mrr, ndcg5, ndcg10, loss_l2, loss_total, u_rep_norm, cand_rep_norm)
     else:
         loss, acc, auc, ap, mrr, ndcg5, ndcg10, logits = (zip(*metrics_epoch))
         stats = (loss, acc, auc, ap, mrr, ndcg5, ndcg10)
@@ -470,7 +441,7 @@ if __name__ == "__main__":
 
 
     #training
-    parser.add_argument('--batch_size', type=int, default=100, help='batch size for training')
+    parser.add_argument('--batch_size', type=int, default=10, help='batch size for training')
     parser.add_argument('--n_epochs', type=int, default=10, help='Epoch number for training')
     parser.add_argument('--lambda_l2', type=float, default=0.0, help='Parameter to control L2 loss')
 
