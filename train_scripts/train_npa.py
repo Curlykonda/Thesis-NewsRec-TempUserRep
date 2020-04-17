@@ -103,15 +103,15 @@ def test_npa_act_func(model, test_generator, act_func="sigmoid"):
             for idx, u_id in enumerate(user_ids):
                 u_id = u_id.item()
 
-                preds = y_probs[idx].detach().cpu().numpy().tolist()
-                targets = lbls[idx].cpu().numpy().tolist()
+                y_scores = y_probs[idx].detach().cpu().numpy().tolist()
+                y_true = lbls[idx].cpu().numpy().tolist()
                 if u_id not in click_scores:
                     click_scores[u_id] = []
-                    click_scores[u_id].append(preds)
-                    click_scores[u_id].append(targets)
+                    click_scores[u_id].append(y_scores)
+                    click_scores[u_id].append(y_true)
                 else:
-                    click_scores[u_id][0].extend(preds)
-                    click_scores[u_id][1].extend(targets)
+                    click_scores[u_id][0].extend(y_scores)
+                    click_scores[u_id][1].extend(y_true)
 
             metrics_epoch.append(
                 (test_loss.item(),
@@ -128,13 +128,13 @@ def test_npa_act_func(model, test_generator, act_func="sigmoid"):
 
     metrics = defaultdict(list)
     for u_id in click_scores:
-        preds = click_scores[u_id][0]
-        targets = click_scores[u_id][1]
-        metrics['auc'].append(roc_auc_score(targets, preds))
-        metrics['ap'].append(average_precision_score(targets, preds))
-        metrics['mrr'].append(mrr_score(targets, preds))
-        metrics['ndcg5'].append(ndcg_score(targets, preds, k=5))
-        metrics['ndcg10'].append(ndcg_score(targets, preds, k=10))
+        y_scores = click_scores[u_id][0]
+        y_true = click_scores[u_id][1]
+        metrics['auc'].append(roc_auc_score(y_true, y_scores))
+        metrics['ap'].append(average_precision_score(y_true, y_scores))
+        metrics['mrr'].append(mrr_score(y_true, y_scores))
+        metrics['ndcg5'].append(ndcg_score(y_true, y_scores, k=5))
+        metrics['ndcg10'].append(ndcg_score(y_true, y_scores, k=10))
 
     metrics_epoch = [
         (np.mean(loss),
@@ -201,19 +201,32 @@ def train_npa_actfunc(npa_model, criterion, optim, train_generator, act_func="so
         optim.step()
 
         # add metrics
-        lbl_cpu = lbls.cpu()
-        y_probs_cpu = y_probs.detach().cpu()
+        y_true = lbls.cpu().numpy()
+        y_scores = y_probs.detach().cpu().numpy()
 
-        u_rep_norm = torch.mean(torch.norm(npa_model.user_rep, p=2, dim=1))
-        cand_rep_norm = torch.mean(torch.norm(npa_model.candidate_reps, p=2, dim=1))
+        u_rep_norm = torch.mean(torch.norm(npa_model.user_rep, p=2, dim=1)).item()
+        cand_rep_norm = torch.mean(torch.norm(npa_model.candidate_reps, p=2, dim=1)).item()
 
         mrr_scores, ndcg5_scores, ndcg10_scores = zip(*[(mrr_score(lbl, pred), ndcg_score(lbl, pred, k=5), ndcg_score(lbl, pred, k=10))
-                                                        for lbl, pred in zip(lbl_cpu.numpy(), y_probs_cpu.detach().numpy())])
+                                                        for lbl, pred in zip(y_true, y_scores)])
+
+        try:
+            auc = roc_auc_score(y_true, y_scores),  # TPR v. FPR with varying threshold
+            ap = average_precision_score(y_true, y_scores)
+        except ValueError:
+            print("holthaus")
+            auc, ap = zip(*[(roc_auc_score(y, pred), average_precision_score(y, pred)) for y, pred in zip(y_true, y_scores)])
+
+            auc = np.mean(auc)
+            ap = np.mean(ap)
+
+        # gini coefficient
+        gini = 2*auc - 1 # normalize AUC: random classifier scores 0, and a perfect one scores 1
 
         metrics_epoch.append((loss_bce.item(),
-                              compute_acc_tensors(y_probs_cpu, lbl_cpu),
-                              roc_auc_score(lbl_cpu, y_probs_cpu),  # TPR v. FPR with varying threshold
-                              average_precision_score(lbl_cpu, y_probs_cpu), # \text{AP} = \sum_n (R_n - R_{n-1}) P_n
+                              compute_acc_tensors(y_probs.cpu(), lbls.cpu()),
+                              auc,
+                              ap, # \text{AP} = \sum_n (R_n - R_{n-1}) P_n
                               np.mean(mrr_scores),
                               np.mean(ndcg5_scores),
                               np.mean(ndcg10_scores),
@@ -342,9 +355,9 @@ def main(config):
         metrics_test = log_metrics(epoch, metrics_epoch, metrics_test, writer, mode='test', method=config.log_method)
 
         print("\n {} epoch".format(epoch))
-        print("TRAIN: BCE loss {:1.3f} \t acc {:0.3f} \t auc {:0.3f} \t ap {:0.3f} \t L2 loss: {:0.3f} in {:0.1f} min".format(
+        print("TRAIN: BCE loss {:1.3f} \t acc {:0.3f} \t auc {:0.3f} \t ap {:0.3f} \t L2 loss: {:0.1f} in {:0.1f} min".format(
                 metrics_train['loss'][-1], metrics_train['acc'][-1], metrics_train['auc'][-1], metrics_train['ap'][-1], metrics_train['loss_l2'][-1], (t1-t0)/60))
-        print("TEST: BCE loss {:1.3f}  \t acc {:0.3f} \t auc {:0.3f} \t ap {:0.3f} in {:0.1f} min".format(
+        print("TEST: BCE loss {:1.3f}  \t acc {:0.3f} \t auc {:0.3f} \t ap {:0.3f} \t \t in {:0.1f} min".format(
                 metrics_test['loss'][-1], metrics_test['acc'][-1], metrics_test['auc'][-1], metrics_test['ap'][-1], (t2-t1)/60))
 
         print(eval_msg)
