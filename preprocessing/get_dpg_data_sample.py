@@ -305,6 +305,8 @@ def get_data_common_interactions(data_dir, n_news, n_users, news_len=30, min_his
             c_art_ids = pickle.load(fin)
     else:
         c_art_ids = count_article_interactions(data_dir)
+        with open(save_path / "counter_article_ids.pkl", 'wb') as fout:
+            pickle.dump(c_art_ids, fout)
 
     valid_article_ids = set([e[0] for e in c_art_ids.most_common(n_news)])
 
@@ -327,9 +329,6 @@ def get_data_common_interactions(data_dir, n_news, n_users, news_len=30, min_his
             sample_name = ('i{}k_u{}k_s{}'.format(int(n_news/1e3), int(n_users/1e3), news_len))
         save_path = save_path / sample_name
         save_path.mkdir(parents=True, exist_ok=True)
-
-        with open(save_path / "counter_article_ids.pkl", 'wb') as fout:
-            pickle.dump(c_art_ids, fout)
 
         fn = 'news_data.pkl'
         with open(save_path / fn, 'wb') as fout:
