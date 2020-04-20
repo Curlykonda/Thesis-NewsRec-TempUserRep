@@ -237,7 +237,7 @@ def prep_dpg_user_file(user_file, news_file, art_id2idx, train_method, test_inte
 
         # assumption: for testing use the entire reading history of that user but evaluate on unseen articles
 
-        cand_article_ids = set(news_data['all'].keys())
+        cand_article_ids = (set(news_data['all'].keys()) - news_data['test']).union(set(news_data['train']))
 
         if 'wu' == train_method:
             #########################################
@@ -246,24 +246,20 @@ def prep_dpg_user_file(user_file, news_file, art_id2idx, train_method, test_inte
             for pos_sample in train_impres:
                 #
                 # (u_id, hist, cands, lbls)
-                # train_sample = create_train_sample(pos_sample, cand_article_ids, neg_sample_ratio, candidate_generation='neg_sampling')
                 #
                 # Candidate Generation: generate negative samples
                 candidate_articles = [art_id2idx[art_id] for art_id in
-                                      sample_n_from_elements(cand_article_ids - set(train_impres), neg_sample_ratio)]
+                                      sample_n_from_elements(cand_article_ids, neg_sample_ratio)]
                 candidate_articles.append(pos_sample)
                 lbls = [0] * neg_sample_ratio + [1]  # create temp labels
                 candidate_articles = list(zip(candidate_articles, lbls))  # zip art_id and label
                 random.shuffle(candidate_articles)  # shuffle article ids with corresponding label
                 candidate_articles = np.array(candidate_articles)
 
-
-                pos_set = list(set(pos_impre) - set([pos_sample]))  # remove positive sample from user history
                 # sample RANDOM elems from set of pos impressions -> Note that this is the orig. NPA approach => Sequence Order is lost
+                pos_set = list(set(pos_impre) - set([pos_sample]))  # remove positive sample from user history
                 hist = [int(p) for p in random.sample(pos_set, min(max_hist_len, len(pos_set)))[:max_hist_len]]
-
                 hist += [0] * (max_hist_len - len(hist))
-
                 add_instance_to_data(data['train'], u_id2idx[u_id], hist, candidate_articles[:, 0], candidate_articles[:, 1])
 
             # create test instances
@@ -278,7 +274,9 @@ def prep_dpg_user_file(user_file, news_file, art_id2idx, train_method, test_inte
                 else:
                     test_ids = set(test_impres)
 
-                cand_article_ids = articles_test - test_ids
+                # Assumption: for testing, use all articles (train + test interval) as potential candidates
+                # but exclude user-specific test impressions
+                cand_article_ids = set(news_data['all'].keys()) - set(test_impres)
 
                 for pos_test_sample in test_impres:
                     '''              
@@ -288,11 +286,10 @@ def prep_dpg_user_file(user_file, news_file, art_id2idx, train_method, test_inte
                     - Shuffle zip(cands, lbls)            
                     - add samples to data dict            
                     '''
-
                     # generate test candidates
                     ## sample candidates from articles in test interval
                     candidate_articles = [art_id2idx[art_id] for art_id in
-                                          sample_n_from_elements(cand_article_ids - set(test_impres), neg_sample_ratio)]
+                                          sample_n_from_elements(cand_article_ids, neg_sample_ratio)]
                     candidate_articles.append(pos_test_sample)
                     lbls = [0] * neg_sample_ratio + [1]  # create temp labels
                     candidate_articles = list(zip(candidate_articles, lbls))  # zip art_id and label
@@ -303,10 +300,14 @@ def prep_dpg_user_file(user_file, news_file, art_id2idx, train_method, test_inte
                     add_instance_to_data(data['test'], u_id2idx[u_id], hist_test, candidate_articles[:, 0], candidate_articles[:, 1])
 
         elif 'pos_cut_off' == train_method:
+
+            # candidate articles for training: exlcude those from testing interval
+            #cand_article_ids = set(news_data['all'].keys()) - set(news_data['test']) + set(news_data['train'])
+
             u_id = u_id2idx[u_id]
 
             train_samples = generate_target_hist_instance_pos_cutoff(u_id, train_impres, None,
-                                                                        cand_article_ids - set(train_impres),
+                                                                        cand_article_ids,
                                                                         art_id2idx, max_hist_len,
                                                                         min_hist_len=5, mode="train")
             # add train instances to data
@@ -314,8 +315,10 @@ def prep_dpg_user_file(user_file, news_file, art_id2idx, train_method, test_inte
                 add_instance_to_data(data['train'], u_id, hist, cands, lbls)
 
             if len(test_impres) != 0:
+                cand_article_ids = set(news_data['all'].keys()) - set(test_impres)
+
                 test_samples = generate_target_hist_instance_pos_cutoff(u_id, train_impres, test_impres,
-                                                                            cand_article_ids - set(test_impres),
+                                                                            cand_article_ids,
                                                                             art_id2idx, max_hist_len,
                                                                             min_hist_len=5, mode="test")
                 # add test instance to data
