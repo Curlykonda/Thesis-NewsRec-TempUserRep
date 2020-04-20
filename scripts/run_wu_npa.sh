@@ -28,7 +28,7 @@ eval="wu"
 interest_extractor="None"
 #SEEDS=(42, 113, 1337, 264)
 
-for SEED in {100..104}
+for SEED in {42..46}
 do
   #1
   python -u train_npa.py --data_path=$datapath --word_emb_path=$embeddings --exp_name="med_vanilla_npa" \
