@@ -214,7 +214,7 @@ def train_npa_actfunc(npa_model, criterion, optim, train_generator, act_func="so
             auc = roc_auc_score(y_true, y_scores),  # TPR v. FPR with varying threshold
             ap = average_precision_score(y_true, y_scores)
         except ValueError:
-            print("holthaus")
+            #print("holthaus")
             auc, ap = zip(*[(roc_auc_score(y, pred), average_precision_score(y, pred)) for y, pred in zip(y_true, y_scores)])
 
             auc = np.mean(auc)
@@ -355,10 +355,11 @@ def main(config):
         metrics_test = log_metrics(epoch, metrics_epoch, metrics_test, writer, mode='test', method=config.log_method)
 
         print("\n {} epoch".format(epoch))
-        print("TRAIN: BCE loss {:1.3f} \t acc {:0.3f} \t auc {:0.3f} \t ap {:0.3f} \t L2 loss: {:0.1f} in {:0.1f} min".format(
-                metrics_train['loss'][-1], metrics_train['acc'][-1], metrics_train['auc'][-1], metrics_train['ap'][-1], metrics_train['loss_l2'][-1], (t1-t0)/60))
-        print("TEST: BCE loss {:1.3f}  \t acc {:0.3f} \t auc {:0.3f} \t ap {:0.3f} \t \t in {:0.1f} min".format(
+        print("TRAIN: BCE loss {:0.3f} \t acc {:0.3f} \t auc {:0.3f} \t ap {:0.3f} in {:0.1f} min".format(
+                metrics_train['loss'][-1], metrics_train['acc'][-1], metrics_train['auc'][-1], metrics_train['ap'][-1], (t1-t0)/60))
+        print("TEST: BCE loss {:0.3f}  \t acc {:0.3f} \t auc {:0.3f} \t ap {:0.3f} in {:0.1f} min".format(
                 metrics_test['loss'][-1], metrics_test['acc'][-1], metrics_test['auc'][-1], metrics_test['ap'][-1], (t2-t1)/60))
+        print("L2 loss: {:0.1f}".format(metrics_train['loss_l2'][-1]))
 
         print(eval_msg)
 
