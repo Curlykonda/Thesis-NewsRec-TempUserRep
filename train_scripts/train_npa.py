@@ -258,7 +258,7 @@ def main(config):
     # Get & prepare data
     # data is indexed by user_ids
     dataset, vocab, news_as_word_ids, art_id2idx, u_id2idx = get_dpg_data_processed(config.data_path, config.train_method, config.neg_sample_ratio,
-                                                                                    config.max_hist_len, config.max_news_len, load_prepped=True)
+                                                                                    config.max_hist_len, config.max_news_len, load_prepped=config.load_prep_data)
     word_embeddings = get_embeddings_from_pretrained(vocab, emb_path=config.word_emb_path)
 
     train_data = dataset['train']
@@ -355,10 +355,12 @@ def main(config):
         metrics_test = log_metrics(epoch, metrics_epoch, metrics_test, writer, mode='test', method=config.log_method)
 
         print("\n {} epoch".format(epoch))
-        print("TRAIN: BCE loss {:0.3f} \t acc {:0.3f} \t auc {:0.3f} \t ap {:0.3f} in {:0.1f} min".format(
-                metrics_train['loss'][-1], metrics_train['acc'][-1], metrics_train['auc'][-1], metrics_train['ap'][-1], (t1-t0)/60))
-        print("TEST: BCE loss {:0.3f}  \t acc {:0.3f} \t auc {:0.3f} \t ap {:0.3f} in {:0.1f} min".format(
-                metrics_test['loss'][-1], metrics_test['acc'][-1], metrics_test['auc'][-1], metrics_test['ap'][-1], (t2-t1)/60))
+        print("TRAIN: BCE loss {:0.3f} \t ACC {:0.3f} \t AUC {:0.3f} \t AP {:0.3f} \t MRR {:0.3f} \t in {:0.1f} min".format(
+                metrics_train['loss'][-1], metrics_train['acc'][-1], metrics_train['auc'][-1], metrics_train['ap'][-1],
+                metrics_train['mrr'][-1], (t1-t0)/60))
+        print("TEST: BCE loss {:0.3f}  \t acc {:0.3f} \t auc {:0.3f} \t ap {:0.3f} \t MRR {:0.3f} \t in {:0.1f} min".format(
+                metrics_test['loss'][-1], metrics_test['acc'][-1], metrics_test['auc'][-1], metrics_test['ap'][-1],
+                metrics_train['mrr'][-1], (t2-t1)/60))
         print("L2 loss: {:0.1f}".format(metrics_train['loss_l2'][-1]))
 
         print(eval_msg)
