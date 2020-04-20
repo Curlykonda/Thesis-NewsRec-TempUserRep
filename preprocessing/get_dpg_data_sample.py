@@ -354,7 +354,7 @@ if __name__ == "__main__":
     parser.add_argument('--n_users', type=int, default=10000, help='number of users')
 
     #parser.add_argument('--vocab_size', type=int, default=30000, help='vocab')
-    parser.add_argument('--time_threshold', type=int, default=(2019, 12, 24, 23, 59, 59), help='date for splitting train/test')
+    parser.add_argument('--time_threshold', type=str, default="2019-12-24-23-59-59", help='date for splitting train/test')
 
     parser.add_argument('--news_len', type=int, default=30, help='number of words from news body')
     parser.add_argument('--min_hist_len', type=int, default=5, help='minimum number of articles in reading history')
@@ -372,7 +372,7 @@ if __name__ == "__main__":
 
     sample_name = config.size + "_time_split_interactions"
 
-    threshold_date = int(datetime.datetime(*config.time_threshold).timestamp()) #1577228399
+    threshold_date = int(datetime.datetime.strptime(config.time_threshold, '%d-%m-%Y-%H-%M-%S').strftime("%s")) #1577228399
 
     news_data, user_data, logging_dates = get_data_common_interactions(config.data_dir, n_news, n_users,
                                                                        news_len=config.news_len, min_hist_len=config.min_hist_len,
