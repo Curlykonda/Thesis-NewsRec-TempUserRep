@@ -298,12 +298,12 @@ def main(config):
     #
     # build model
     #
-    model_params = {'n_users': len(dataset['train'])+len(dataset['test']), 'vocab_len': len(vocab),
+    model_params = {'n_users': len(u_id2idx), 'vocab_len': len(vocab),
                     'dim_user_id': 50, 'dim_pref_query': 200, 'dim_words': 300,
                     'max_title_len': config.max_hist_len, 'device': device,
                     'interest_extractor': config.interest_extractor}
 
-    npa_model = NPA_wu(n_users=len(dataset['train'])+len(dataset['test']), vocab_len=len(vocab), pretrained_emb=word_embeddings,
+    npa_model = NPA_wu(n_users=len(u_id2idx), vocab_len=len(vocab), pretrained_emb=word_embeddings,
                        emb_dim_user_id=50, emb_dim_pref_query=200, emb_dim_words=300,
                        max_news_len=config.max_news_len, max_hist_len=config.max_hist_len,
                        device=device, interest_extractor=config.interest_extractor)
