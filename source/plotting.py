@@ -15,6 +15,7 @@ cmaps['Sequential'] = [
             'Greys', 'Purples', 'Blues', 'Greens', 'Oranges', 'Reds',
             'YlOrBr', 'YlOrRd', 'OrRd', 'PuRd', 'RdPu', 'BuPu',
             'GnBu', 'PuBu', 'YlGnBu', 'PuBuGn', 'BuGn', 'YlGn']
+
 cmaps['Sequential-my'] = [
             'YlOrBr', 'Blues', 'Reds', 'Greens', 'Oranges', 'Purples', 'PuRd', 'GnBu', 'BuGn']
 
