@@ -21,7 +21,7 @@ python --version
 
 #srun -n 2 -t 00:30:00 --pty bash -il
 
-datapath="../datasets/dpg/dev_time_split/"
+datapath="../datasets/dpg/dev_time_split_interactions/"
 embeddings="../embeddings/cc.nl.300.bin"
 
 python -u train_npa.py --data_path=$datapath --word_emb_path=$embeddings --exp_name="dev" --train_method="wu"
