@@ -1,9 +1,8 @@
 #!/bin/bash
 #SBATCH --job-name=prep_dpg_data
 #SBATCH -n 4
-#SBATCH -t 01:00:00
+#SBATCH -t 00:20:00
 #SBATCH --mem=60000M
-
 
 module load pre2019
 module load Miniconda3/4.3.27
