@@ -21,7 +21,7 @@ import sys
 sys.path.append("..")
 
 from source.my_datasets import DPG_Dataset
-from source.models.NPA import NPA_wu, init_weights
+from source.models.NPA import VanillaNPA, init_weights
 from source.utils_npa import get_dpg_data_processed, get_embeddings_from_pretrained, get_hyper_model_params
 from source.utils import print_setting, save_metrics_as_pickle, save_config_as_json, create_exp_name, save_exp_name_label
 from source.metrics import *
@@ -279,12 +279,12 @@ def main(config):
     # build model
     #
     if config.npa_variant == "vanilla":
-        npa_model = NPA_wu(n_users=len(dataset['train'])+len(dataset['test']), vocab_len=len(vocab),
-                           pretrained_emb=word_embeddings, device=device)
+        npa_model = VanillaNPA(n_users=len(dataset['train']) + len(dataset['test']), vocab_len=len(vocab),
+                               pretrained_emb=word_embeddings, device=device)
     else:
-        npa_model = NPA_wu(n_users=len(dataset['train'])+len(dataset['test']), vocab_len=len(vocab),
-                           pretrained_emb=word_embeddings, device=device,
-                           **model_params)
+        npa_model = VanillaNPA(n_users=len(dataset['train']) + len(dataset['test']), vocab_len=len(vocab),
+                               pretrained_emb=word_embeddings, device=device,
+                               **model_params)
     npa_model.to(device)
     #
     #npa_model.apply(init_weights)
