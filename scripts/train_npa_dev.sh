@@ -24,7 +24,12 @@ python --version
 datapath="../datasets/dpg/dev_time_split_interactions/"
 embeddings="../embeddings/cc.nl.300.bin"
 
-python -u train_npa.py --data_path=$datapath --word_emb_path=$embeddings --exp_name="dev" --train_method="wu"
+for SEED in {42..45}
+do
+
+python -u train_npa.py --data_path=$datapath --word_emb_path=$embeddings --exp_name="dev_old" --train_method="wu" --random_seed=$SEED
+done
+
 #python -u train_npa.py --data_path=$datapath --word_emb_path=$embeddings --exp_name="dev_cut" --train_method="pos_cut_off" \
 #  --test_act_func="softmax"
 #python -u train_npa.py --data_path=$datapath --word_emb_path=$embeddings --exp_name="dev_cut" --train_method="pos_cut_off" \

@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --job-name=train_npa_large
 #SBATCH -n 8
-#SBATCH -t 12:00:00
+#SBATCH -t 08:00:00
 #SBATCH -p gpu_shared
 #SBATCH --gres=gpu:1
 #SBATCH --mem=60000M
@@ -19,9 +19,12 @@ cd $workdir/train_scripts
 
 python --version
 
-python -u train_npa.py --data_path="../datasets/dpg/i100k_u50k_s30/" --word_emb_path="../embeddings/cc.nl.300.bin" --test_w_one=1 --exp_name="large"
-python -u train_npa.py --data_path="../datasets/dpg/i100k_u50k_s30/" --word_emb_path="../embeddings/cc.nl.300.bin" --weight_decay=0.0001 --test_w_one=1 --exp_name="large-wd1e4"
-#python -u train_npa.py --data_path="../datasets/dpg/i100k_u50k_s30/" --word_emb_path="../embeddings/cc.nl.300.bin" --test_w_one=1 --random_seed=13 --exp_name="large"
-#python -u train_npa.py --data_path="../datasets/dpg/i100k_u50k_s30/" --word_emb_path="../embeddings/cc.nl.300.bin" --test_w_one=1 --random_seed=102 --exp_name="large"
+datapath="../datasets/dpg/medium_time_split_interactions/"
+embeddings="../embeddings/cc.nl.300.bin"
 
+for SEED in {42..45}
+do
+
+python -u train_npa.py --data_path=$datapath --word_emb_path=$embeddings --exp_name="med_old" --train_method="wu" --random_seed=$SEED
+done
 
