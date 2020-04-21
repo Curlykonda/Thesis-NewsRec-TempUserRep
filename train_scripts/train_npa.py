@@ -189,8 +189,7 @@ def train_npa_actfunc(npa_model, criterion, optim, train_generator, act_func="so
                 loss_l2 = loss_l2 + param.norm(2)
 
         if 0 < config.lambda_l2:
-            loss_l2 = loss_l2 * config.lambda_l2
-            loss_total = loss_bce + loss_l2
+            loss_total = loss_bce + loss_l2 * config.lambda_l2
         else:
             loss_total = loss_bce
 
@@ -279,10 +278,10 @@ def main(config):
     # build model
     #
     if config.npa_variant == "vanilla":
-        npa_model = VanillaNPA(n_users=len(dataset['train']) + len(dataset['test']), vocab_len=len(vocab),
+        npa_model = VanillaNPA(n_users=len(u_id2idx), vocab_len=len(vocab),
                                pretrained_emb=word_embeddings, device=device)
     else:
-        npa_model = VanillaNPA(n_users=len(dataset['train']) + len(dataset['test']), vocab_len=len(vocab),
+        npa_model = VanillaNPA(n_users=len(u_id2idx), vocab_len=len(vocab),
                                pretrained_emb=word_embeddings, device=device,
                                **model_params)
     npa_model.to(device)
