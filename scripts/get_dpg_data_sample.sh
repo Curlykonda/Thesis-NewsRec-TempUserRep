@@ -23,5 +23,5 @@ datapath="../datasets/dpg/"
 thresh_date = "24-12-2019-23-59-59"
 
   #1
-python -u get_dpg_data_sample.py --data_dir=$datapath --save_dir=$datapath --size="medium" --time_threshold=$thresh_date
-python -u get_dpg_data_sample.py --data_dir=$datapath --save_dir=$datapath --size="dev" --time_threshold=$thresh_date
+python -u get_dpg_data_sample.py --data_dir=$datapath --save_path=$datapath --size="medium" --time_threshold=$thresh_date
+python -u get_dpg_data_sample.py --data_dir=$datapath --save_path=$datapath --size="dev" --time_threshold=$thresh_date
