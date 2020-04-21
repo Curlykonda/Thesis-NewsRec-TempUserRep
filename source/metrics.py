@@ -25,5 +25,5 @@ def compute_acc_tensors(preds, targets):
     if len(targets.shape) > 1:
         acc = ((preds.argmax(dim=-1) == targets.argmax(dim=-1)).sum().float() / targets.shape[0]).item()
     else:
-        acc = (preds == targets).sum().float() / targets.shape[0]
+        acc = ((preds == targets).sum().float() / targets.shape[0]).item()
     return acc

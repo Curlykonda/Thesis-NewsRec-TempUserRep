@@ -19,32 +19,26 @@ def mot_pooling(x):
 
 class KimCNN(torch.nn.Module):
   # Shape after conv is (batch, x, y)
-  def __init__(self, in_dim, conv_channels, num_classes):
+  def __init__(self, n_filters, word_emb_dim, kernels=[3, 4, 5]):
     super(KimCNN, self).__init__()
 
-    self.in_dim = in_dim
-    self.conv_channels = []
-
-    self.conv1 = Conv1d(in_channels=1, out_channels=100, kernel_size=3)
-    self.conv2 = Conv1d(in_channels=1, out_channels=100, kernel_size=4)
-    self.conv3 = Conv1d(in_channels=1, out_channels=100, kernel_size=5)
-
-    self.fc = Linear(300, num_classes)
+    self.n_filters = n_filters
+    self.word_emb_dim = word_emb_dim
+    self.kernels = kernels
+    self.convs = nn.ModuleList([
+      nn.Conv1d(1, out_channels=n_filters, kernel_size=(kernel, word_emb_dim), padding=(kernel-2, 0))
+      for kernel in kernels
+    ])
 
   def forward(self, x):
-    # Pass through conv channels
-    out1 = self.conv1(x)
-    out2 = self.conv2(x)
-    out3 = self.conv3(x)
+    # Pass through each conv layer
+    outs = [conv(x) for conv in self.convs]
+
     # Max over time pooling
-    out1 = mot_pooling(out1)
-    out2 = mot_pooling(out2)
-    out3 = mot_pooling(out3)
+    outs_pooled = [mot_pooling(out) for out in outs]
     # Concatenate over channel dim
-    out = torch.cat((out1, out2, out3), 1)
+    out = torch.cat(outs_pooled, 1)
     # Flatten
     out = out.view(out.size(0), -1)
-    # Pass to linear modules
-    out = self.fc(out)
 
     return out
