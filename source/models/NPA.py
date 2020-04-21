@@ -42,9 +42,9 @@ class BaseModelNPA(nn.Module):
             #print("Emb shape is {} and should {}".format(pretrained_emb.shape, (vocab_len, emb_dim_words)))
             self.word_embeddings = nn.Embedding.from_pretrained(torch.FloatTensor(pretrained_emb), freeze=False, padding_idx=0)      # word embeddings
         else:
-            self.word_embeddings = nn.Embedding(vocab_len, emb_dim_words)
+            self.word_embeddings = nn.Embedding(vocab_len, emb_dim_words, padding_idx=0)
 
-        self.user_id_embeddings = nn.Embedding(n_users, self.dim_emb_user_id, padding_idx=0)
+        self.user_id_embeddings = nn.Embedding(n_users, self.dim_emb_user_id)
 
         self.news_encoder = (NewsEncoderWuCNN(n_filters=n_filters_cnn, word_emb_dim=emb_dim_words, dim_pref_q=emb_dim_pref_query, dropout_p=dropout_p)
                              if news_encoder is None else news_encoder)
