@@ -354,7 +354,7 @@ if __name__ == "__main__":
     parser.add_argument('--n_users', type=int, default=10000, help='number of users')
 
     #parser.add_argument('--vocab_size', type=int, default=30000, help='vocab')
-    parser.add_argument('--time_threshold', type=str, default="2019-12-24-23-59-59", help='date for splitting train/test')
+    parser.add_argument('--time_threshold', type=str, default="24-12-2019-23-59-59", help='date for splitting train/test')
 
     parser.add_argument('--news_len', type=int, default=30, help='number of words from news body')
     parser.add_argument('--min_hist_len', type=int, default=5, help='minimum number of articles in reading history')
