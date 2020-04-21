@@ -23,15 +23,14 @@ python --version
 
 datapath="../datasets/dpg/medium_time_split_interactions/"
 embeddings="../embeddings/cc.nl.300.bin"
-#train="wu"
-#eval="wu"
+train="wu"
+eval="wu"
 #interest_extractor="None"
 
-SEED=43
-#for SEED in {42..45}
-#do
+for SEED in {42..45}
+do
   #1
   python -u train_npa.py --data_path=$datapath --word_emb_path=$embeddings --exp_name="med_vanilla_npa" \
-    --npa_variant="vanilla" --random_seed=$SEED --n_epochs=15 --batch_size=100
+    --npa_variant="vanilla" --random_seed=$SEED --n_epochs=10 --batch_size=100 --train_method=$train --eval_method=$eval
   echo $SEED
-#done
+done
