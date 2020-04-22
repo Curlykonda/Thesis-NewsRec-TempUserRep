@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --job-name=run_wu_npa
 #SBATCH -n 4
-#SBATCH -t 02:00:00
+#SBATCH -t 10:00:00
 #SBATCH -p gpu_shared
 #SBATCH --gres=gpu:1
 #SBATCH --mem=60000M
@@ -28,7 +28,7 @@ eval="wu"
 
 echo $datapath
 
-for SEED in {42..45}
+for SEED in {42..44}
 do
   #1
   echo $SEED
