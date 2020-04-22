@@ -17,6 +17,7 @@ sys.path.append("..")
 
 DATA_SIZES = {'dev': [10e3, 2e3], 'medium': [45e3, 10e3], 'large': [250e3, 50e3]}
 
+USER_ITEM_RATIO = 10
 
 def data_stream_generator(data_dir):
     files = [file for file in Path(data_dir).iterdir() if
@@ -352,6 +353,7 @@ if __name__ == "__main__":
     parser.add_argument('--size', type=str, default='medium', help='size of dataset')
     parser.add_argument('--n_items', type=int, default=45000, help='number of items')
     parser.add_argument('--n_users', type=int, default=10000, help='number of users')
+    parser.add_argument('--ratio_user_items', type=int, default=USER_ITEM_RATIO, help='ratio of user to items, e.g. 1 : 10')
 
     #parser.add_argument('--vocab_size', type=int, default=30000, help='vocab')
     parser.add_argument('--time_threshold', type=str, default="24-12-2019-23-59-59", help='date for splitting train/test')
