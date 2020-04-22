@@ -253,7 +253,7 @@ def train_npa_actfunc(npa_model, criterion, optim, train_generator, act_func="so
                               loss_total.item()
                               ))
 
-        if device.type == 'cpu': #and i_batch > 0: #
+        if device.type == 'cpu' and i_batch > 0: #
             print("Stopped after {} batches".format(i_batch + 1))
             break
     return metrics_epoch
@@ -370,21 +370,22 @@ def main(config):
             metrics_epoch, eval_msg = test_eval_like_npa_wu(npa_model, test_generator, act_func=config.test_act_func,
                                                             one_candidate=config.test_w_one)
         else:
-            raise KeyError("{} is no valid evluation method".format(config.eval_method))
+            raise KeyError("{} is no valid evaluation method".format(config.eval_method))
 
         # logging
         t2 = time.time()
         metrics_test = log_metrics(epoch, metrics_epoch, metrics_test, writer, mode='test', method=config.log_method)
 
         print("\n {} epoch".format(epoch))
-        print("TRAIN: BCE loss {:1.3f} \t acc {:0.3f} \t auc {:0.3f} \t ap {:0.3f} \t L2 loss: {:0.3f} in {:0.1f}s".format(
-                metrics_train['loss'][-1], metrics_train['acc'][-1], metrics_train['auc'][-1], metrics_train['ap'][-1], metrics_train['loss_l2'][-1], (t1-t0)))
-        print("TEST: BCE loss {:1.3f}  \t acc {:0.3f} \t auc {:0.3f} \t ap {:0.3f} in {:0.1f}s".format(
+        print("TRAIN: BCE loss {:0.3f} \t acc {:0.3f} \t auc {:0.3f} \t ap {:0.3f} in {:0.1f}s".format(
+                metrics_train['loss'][-1], metrics_train['acc'][-1], metrics_train['auc'][-1], metrics_train['ap'][-1], (t1-t0)))
+        print("TEST: BCE loss {:0.3f}  \t acc {:0.3f} \t auc {:0.3f} \t ap {:0.3f} in {:0.1f}s".format(
                 metrics_test['loss'][-1], metrics_test['acc'][-1], metrics_test['auc'][-1], metrics_test['ap'][-1], (t2-t1)))
+        print("L2 norm model params: {:0.2f}".format(metrics_train['loss_l2'][-1]))
 
         print(eval_msg)
 
-        if device.type == 'cpu':
+        if device.type == 'cpu' and 0 < epoch:
             break
 
     print("\n---------- Done in {0:.2f} min ----------\n".format((time.time()-t_train_start)/60))
@@ -471,7 +472,7 @@ if __name__ == "__main__":
                         help='[None, gru]')
 
     #training
-    parser.add_argument('--batch_size', type=int, default=100, help='batch size for training')
+    parser.add_argument('--batch_size', type=int, default=30, help='batch size for training')
     parser.add_argument('--n_epochs', type=int, default=10, help='Epoch number for training')
     parser.add_argument('--lambda_l2', type=float, default=0.0, help='Parameter to control L2 loss')
 
