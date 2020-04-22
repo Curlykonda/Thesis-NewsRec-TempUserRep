@@ -297,11 +297,11 @@ def main(config):
         config.test_act_func = "sigmoid"
         config.test_w_one = False
     else:
-        optim = torch.optim.Adam(npa_model.parameters(), lr=config.lr, weight_decay=config.weight_decay)
+        optim = torch.optim.Adam(npa_model.parameters(), lr=config.lr) #, weight_decay=config.weight_decay
     #Adam(params, lr=0.001, betas=(0.9, 0.999), eps=1e-08, weight_decay=0, amsgrad=False) default
 
     print(device)
-    print_setting(config, ['random_seed', 'train_method', 'eval_method', 'weight_decay', 'lambda_l2', 'train_act_func', 'test_act_func', 'data_path'])
+    print_setting(config, ['random_seed', 'train_method', 'eval_method', 'lambda_l2', 'train_act_func', 'test_act_func', 'data_path'])
 
     # create dir for logging
     now = datetime.now()
@@ -360,8 +360,8 @@ def main(config):
         print("TEST: BCE loss {:0.3f}  \t acc {:0.3f} \t auc {:0.3f} \t ap {:0.3f} \t MRR {:0.3f} \t in {:0.1f} min".format(
                 metrics_test['loss'][-1], metrics_test['acc'][-1], metrics_test['auc'][-1], metrics_test['ap'][-1],
                 metrics_train['mrr'][-1], (t2-t1)/60))
-        print("L2 loss: {:0.1f}".format(metrics_train['loss_l2'][-1]))
-
+        print("L2 norm model params: {:0.1f}".format(metrics_train['loss_l2'][-1]))
+        print("Test examples:")
         print(eval_msg)
 
         if device.type == 'cpu':
