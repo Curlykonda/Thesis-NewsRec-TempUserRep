@@ -21,7 +21,7 @@ import sys
 sys.path.append("..")
 
 from source.my_datasets import DPG_Dataset
-from source.models.NPA import VanillaNPA, init_weights
+from source.models.NPA import VanillaNPANewsRec, init_weights
 from source.utils_npa import get_dpg_data_processed, get_embeddings_from_pretrained, get_hyper_model_params
 from source.utils import print_setting, save_metrics_as_pickle, save_config_as_json, create_exp_name, save_exp_name_label
 from source.metrics import *
@@ -278,12 +278,12 @@ def main(config):
     # build model
     #
     if config.npa_variant == "vanilla":
-        npa_model = VanillaNPA(n_users=len(u_id2idx), vocab_len=len(vocab),
-                               pretrained_emb=word_embeddings, device=device)
+        npa_model = VanillaNPANewsRec(n_users=len(u_id2idx), vocab_len=len(vocab),
+                                      pretrained_emb=word_embeddings, device=device)
     else:
-        npa_model = VanillaNPA(n_users=len(u_id2idx), vocab_len=len(vocab),
-                               pretrained_emb=word_embeddings, device=device,
-                               **model_params)
+        npa_model = VanillaNPANewsRec(n_users=len(u_id2idx), vocab_len=len(vocab),
+                                      pretrained_emb=word_embeddings, device=device,
+                                      **model_params)
     npa_model.to(device)
     #
     #npa_model.apply(init_weights)
@@ -442,10 +442,10 @@ if __name__ == "__main__":
                         help='maximum length of news article, shorter ones are padded; should be in accordance with the input datasets')
     parser.add_argument('--neg_sample_ratio', type=int, default=4,
                         help='Negative sample ratio N: for each positive impression generate N negative samples')
-    parser.add_argument('--candidate_generation', type=str, default='neg_sampling',
-                        help='Method to generate candidate articles: [neg_sampling, neg_sampling_time]')
-    parser.add_argument('--train_method', type=str, default='wu',
-                        help='Method for network training & format of training samples: [wu, pos_cut_off, masked_interests]')
+    parser.add_argument('--candidate_generation', type=str, default='neg_sampling', choices=['neg_sampling', 'neg_sampling_time'],
+                        help='Method to generate candidate articles')
+    parser.add_argument('--train_method', type=str, default='wu', choices=['wu', 'pos_cut_off', 'masked_interests'],
+                        help='Method for network training & format of training samples')
 
     #model params
     parser.add_argument('--npa_variant', type=str, default='vanilla', help='[vanilla, custom]')
