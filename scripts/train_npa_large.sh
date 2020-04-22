@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --job-name=train_npa_large
 #SBATCH -n 8
-#SBATCH -t 08:00:00
+#SBATCH -t 12:00:00
 #SBATCH -p gpu_shared
 #SBATCH --gres=gpu:1
 #SBATCH --mem=60000M
@@ -25,6 +25,7 @@ embeddings="../embeddings/cc.nl.300.bin"
 for SEED in {42..45}
 do
 
-python -u train_npa.py --data_path=$datapath --word_emb_path=$embeddings --exp_name="med_old" --train_method="wu" --random_seed=$SEED
+python -u train_npa.py --data_path=$datapath --word_emb_path=$embeddings --exp_name="med_old" --train_method="wu" \
+  --batch_size=100 --random_seed=$SEED
 done
 
