@@ -295,7 +295,7 @@ def main(config):
         optim = torch.optim.Adam(npa_model.parameters(), lr=0.001)
         config.train_act_func = "softmax"
         config.test_act_func = "sigmoid"
-        config.test_w_one = False
+        #config.test_w_one = False
     else:
         optim = torch.optim.Adam(npa_model.parameters(), lr=config.lr) #, weight_decay=config.weight_decay
     #Adam(params, lr=0.001, betas=(0.9, 0.999), eps=1e-08, weight_decay=0, amsgrad=False) default
@@ -344,8 +344,7 @@ def main(config):
         if config.eval_method == 'wu':
             metrics_epoch, eval_msg = test_npa_act_func(npa_model, test_generator)
         elif config.eval_method == 'custom':
-            metrics_epoch, eval_msg = test_npa_act_func(npa_model, test_generator, act_func=config.test_act_func,
-                                                        one_candidate=config.test_w_one)
+            metrics_epoch, eval_msg = test_npa_act_func(npa_model, test_generator, act_func=config.test_act_func)
         else:
             raise KeyError("{} is no valid evluation method".format(config.eval_method))
 
@@ -460,13 +459,13 @@ if __name__ == "__main__":
     parser.add_argument('--n_epochs', type=int, default=10, help='Epoch number for training')
     parser.add_argument('--lambda_l2', type=float, default=0.0, help='Parameter to control L2 loss')
 
-    parser.add_argument('--train_act_func', type=str, default='softmax',
+    parser.add_argument('--train_act_func', type=str, default='softmax', choices=['softmax', 'sigmoid'],
                         help='Output activation func Training: [softmax, sigmoid]')
-    parser.add_argument('--test_act_func', type=str, default='sigmoid',
+    parser.add_argument('--test_act_func', type=str, default='sigmoid', choices=['softmax', 'sigmoid'],
                         help='Output activation func Testing: [softmax, sigmoid]')
     parser.add_argument('--log_method', type=str, default='epoch', help='Mode for logging the metrics: [epoch, batches]')
-    parser.add_argument('--test_w_one', type=bool, default=False, help='use only 1 candidate during testing')
-    parser.add_argument('--eval_method', type=str, default='wu', help='Mode for evaluating NPA model: [wu, custom]')
+    #parser.add_argument('--test_w_one', type=bool, default=False, help='use only 1 candidate during testing')
+    parser.add_argument('--eval_method', type=str, default='wu', choices=['wu', 'custom'], help='Mode for evaluating NPA model')
 
 
     # optimiser

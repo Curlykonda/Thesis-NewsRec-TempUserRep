@@ -32,6 +32,10 @@ do
   python -u train_npa.py --data_path=$datapath --word_emb_path=$embeddings --exp_name=$exp_name \
   --npa_variant="vanilla" --random_seed=$SEED --n_epochs=10 --batch_size=100 --train_method=$train --eval_method=$eval
 
+  python -u train_npa.py --data_path=$datapath --word_emb_path=$embeddings --exp_name=$exp_name \
+  --npa_variant="vanilla" --random_seed=$SEED --n_epochs=10 --batch_size=100 --train_method=$train --eval_method='custom'\
+  --test_act_func="softmax"
+
   python -u train_npa.py --data_path=$datapath --word_emb_path=$embeddings --exp_name="dev_l2_npa" \
   --npa_variant="vanilla" --random_seed=$SEED --n_epochs=10 --batch_size=100 --train_method=$train --eval_method=$eval \
   --lambda_l2=0.005
