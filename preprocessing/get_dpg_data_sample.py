@@ -185,52 +185,6 @@ def subsample_users(n_users, item_data, data_dir, min_hist_len, remove_unk_arts=
 
     return user_dict, logging_dates
 
-
-#deprecated [20.04.2020] {HB}
-# def get_dpg_data_sample(data_dir, n_news, n_users, snippet_len=30, min_hist_len=5, sample_name=None, save_path=None, test_time_thresh=None):
-#     # UNIX time for last entry
-#     #datetime.datetime(2019, 12, 31, 23, 59, 59).strftime('%s')
-#     # -> '1577833199'
-#     # datetime.datetime(2019, 12, 24, 23, 59, 59).strftime('%s')
-#     # => '1577228399'
-#
-#     try:
-#         os.listdir(data_dir)
-#     except:
-#         raise FileNotFoundError("Given data directory is wrong!")
-#
-#     # subsample items
-#     print("Sample items ...")
-#     news_data = subsample_items(n_news, snippet_len, data_dir, test_time_thresh=test_time_thresh)
-#
-#     # subsample users
-#     print("Sample users ...")
-#     user_data, logging_dates = subsample_users(n_users, news_data, data_dir, min_hist_len, test_time_thresh=test_time_thresh)
-#
-#     logging_dates = {'start': logging_dates[0], 'end': logging_dates[1]}
-#
-#     if test_time_thresh is not None:
-#         logging_dates['threshold'] = test_time_thresh
-#
-#     if save_path is not None:
-#         save_path = Path(save_path)
-#
-#         if sample_name is None:
-#             sample_name = ('i{}k_u{}k_s{}'.format(int(n_news/1e3), int(n_users/1e3), snippet_len))
-#         save_path = save_path / sample_name
-#         save_path.mkdir(parents=True, exist_ok=True)
-#         fn = 'news_data.pkl'
-#         with open(save_path / fn, 'wb') as fout:
-#             pickle.dump(news_data, fout)
-#
-#         with open(save_path / 'user_data.pkl', 'wb') as fout:
-#             pickle.dump(user_data, fout)
-#
-#         with open(save_path / 'logging_dates.json', 'w') as fout:
-#             json.dump(logging_dates, fout)
-#
-#     return news_data, user_data, logging_dates
-
 def count_article_interactions(data_dir, n_users=None):
 
     c_art_ids = Counter()
@@ -240,6 +194,7 @@ def count_article_interactions(data_dir, n_users=None):
     else:
         limit = -1
 
+    print("Determine most common articles based on user interaction ...")
     for i, user in tqdm(enumerate(data_stream_generator(data_dir + "users"))):
         _, art_ids, _ = zip(*user['articles_read'])
         c_art_ids.update(art_ids)
@@ -251,17 +206,12 @@ def count_article_interactions(data_dir, n_users=None):
 
     return c_art_ids
 
-
 def subsample_items_from_id(data_dir: str, valid_ids: set, news_len: int, n_news: int, add_items=False, keys_to_exclude = ["short_id", "url"], test_time_thresh=None):
     item_dict = OrderedDict()
     item_dict['all'] = {}
 
-    # if test_time_thresh is not None:
-    #     item_dict['train'] = {}
-    #     item_dict['test'] = {}
-
     if add_items:
-        additional_items = n_news - len(valid_ids)
+        additional_items = n_news - (len(valid_ids) if valid_ids is not None else 0)
     else:
         additional_items = 0
 
@@ -282,6 +232,10 @@ def subsample_items_from_id(data_dir: str, valid_ids: set, news_len: int, n_news
             if item['short_id'] not in valid_ids:
                 additional_items -= 1
 
+        else:
+            if n_news == len(item_dict['all']):
+                break
+
         if i % 1e5 == 0 and i>0:
             print("{} items scanned ..".format(i))
 
@@ -296,24 +250,29 @@ def get_data_common_interactions(data_dir, n_news, n_users, news_len=30, min_his
     n_news = int(n_news)
     n_users = int(n_users)
 
-    # subsample items
-    print("Determine most common articles based on user interaction ...")
-
     save_path = Path(save_path)
+    #
+    # subsample items
+    if "most_common" == config.item_sample_method:
 
-    if (save_path / "counter_article_ids.pkl").exists():
-        with open((save_path / "counter_article_ids.pkl"), 'rb') as fin:
-            c_art_ids = pickle.load(fin)
+        if (save_path / "counter_article_ids.pkl").exists():
+            with open((save_path / "counter_article_ids.pkl"), 'rb') as fin:
+                c_art_ids = pickle.load(fin)
+        else:
+            c_art_ids = count_article_interactions(data_dir)
+            with open(save_path / "counter_article_ids.pkl", 'wb') as fout:
+                pickle.dump(c_art_ids, fout)
+
+        valid_article_ids = set([e[0] for e in c_art_ids.most_common(n_news)])
+
+        # get all valid items
+        add_items = (True if len(valid_article_ids) < n_news else False) # flag to indicate whether to add random articles. only applies if most common is insufficient
+        news_data = subsample_items_from_id(data_dir, valid_article_ids, n_news=n_news, news_len=news_len, add_items=add_items, test_time_thresh=test_time_thresh)
+
+    elif "random" == config.item_sample_method:
+        news_data = subsample_items_from_id(data_dir, set(), n_news=n_news, news_len=news_len, add_items=True, test_time_thresh=test_time_thresh)
     else:
-        c_art_ids = count_article_interactions(data_dir)
-        with open(save_path / "counter_article_ids.pkl", 'wb') as fout:
-            pickle.dump(c_art_ids, fout)
-
-    valid_article_ids = set([e[0] for e in c_art_ids.most_common(n_news)])
-
-    # get all valid items
-    add_items = (True if len(valid_article_ids) < n_news else False) # flag to indicate whether to add random articles. only applies if most common is insufficient
-    news_data = subsample_items_from_id(data_dir, valid_article_ids, n_news, news_len, add_items=add_items, test_time_thresh=test_time_thresh)
+        raise NotImplementedError()
 
     # subsample users
     print("Sample users ...")
@@ -324,6 +283,7 @@ def get_data_common_interactions(data_dir, n_news, n_users, news_len=30, min_his
     if test_time_thresh is not None:
         logging_dates['threshold'] = test_time_thresh
 
+    # save data
     if save_path is not None:
 
         if sample_name is None:
@@ -331,8 +291,7 @@ def get_data_common_interactions(data_dir, n_news, n_users, news_len=30, min_his
         save_path = save_path / sample_name
         save_path.mkdir(parents=True, exist_ok=True)
 
-        fn = 'news_data.pkl'
-        with open(save_path / fn, 'wb') as fout:
+        with open(save_path / 'news_data.pkl', 'wb') as fout:
             pickle.dump(news_data, fout)
 
         with open(save_path / 'user_data.pkl', 'wb') as fout:
@@ -350,9 +309,10 @@ if __name__ == "__main__":
     parser.add_argument('--data_dir', type=str, default='../datasets/dpg/', help='data path')
     parser.add_argument('--save_path', type=str, default='../datasets/dpg/', help='path to save data')
 
-    parser.add_argument('--size', type=str, default='medium', help='size of dataset')
-    parser.add_argument('--n_items', type=int, default=45000, help='number of items')
-    parser.add_argument('--n_users', type=int, default=10000, help='number of users')
+    parser.add_argument('--item_sample_method', type=str, default='random', choices=['random', 'most_common'], help='')
+    parser.add_argument('--size', type=str, default='custom', help='size of dataset')
+    parser.add_argument('--n_articles', type=int, default=10000, help='number of articles')
+    parser.add_argument('--n_users', type=int, default=2000, help='number of users')
     parser.add_argument('--ratio_user_items', type=int, default=USER_ITEM_RATIO, help='ratio of user to items, e.g. 1 : 10')
 
     #parser.add_argument('--vocab_size', type=int, default=30000, help='vocab')
@@ -367,12 +327,13 @@ if __name__ == "__main__":
     if config.size in DATA_SIZES.keys():
         n_news, n_users = DATA_SIZES[config.size]
     elif "custom" == config.size:
-        n_news = config.n_news
         n_users = config.n_users
+        n_news = config.n_articles
     else:
         raise NotImplementedError()
 
-    sample_name = config.size + "_time_split_interactions"
+    delim = "_"
+    sample_name = config.size + delim + "time_split" + delim + config.item_sample_method
 
     threshold_date = int(datetime.datetime.strptime(config.time_threshold, '%d-%m-%Y-%H-%M-%S').strftime("%s")) #1577228399
 
