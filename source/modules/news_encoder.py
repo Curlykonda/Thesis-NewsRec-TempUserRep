@@ -20,7 +20,7 @@ class NewsEncoderWuCNN(nn.Module):
                         nn.Dropout(p=dropout_p)
         )
 
-        self.pers_attn_word = PersonalisedAttentionWu(dim_pref_q, n_filters)
+        self.pers_attn_word = PersonalisedAttentionWu(dim_pref_q, n_filters) # word level attn
 
     def forward(self, embedded_news, pref_query):
         contextual_rep = []
@@ -32,15 +32,11 @@ class NewsEncoderWuCNN(nn.Module):
             # concatenate words
             article_one = embedded_news[:, n_news, :, :].squeeze(1) # shape = (batch_size, title_len, emb_dim)
 
-            # if n_news == 0:
-            #     print(article_one.shape)
-
             encoded_news = self.cnn_encoder(article_one.unsqueeze(1))
             # encoded_news.shape = batch_size X n_cnn_filters X max_title_len
 
             #pers attn
             contextual_rep.append(self.pers_attn_word(encoded_news.squeeze(-1), pref_query))
-
             assert contextual_rep[-1].shape[1] == self.n_filters # batch_size X n_cnn_filters
 
         return torch.stack(contextual_rep, axis=2) # batch_s X dim_news_rep X history_len
