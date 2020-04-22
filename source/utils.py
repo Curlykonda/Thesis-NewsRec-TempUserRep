@@ -129,10 +129,6 @@ def save_exp_name_label(config, res_path : Path, exp_name : str):
     # relevant: eval_method, rnd_seed,
     rel_config = {}
     rel_config['eval_method'] = config.eval_method
-    if config.test_w_one:
-        rel_config['test'] = 'sin' # single candidate
-    else:
-        rel_config['test'] = 'mul' # multiple candidates
     rel_config['seed'] = config.random_seed
 
     exp_dict['lbl_short'] = "-".join(list(map(str, rel_config.values())))
