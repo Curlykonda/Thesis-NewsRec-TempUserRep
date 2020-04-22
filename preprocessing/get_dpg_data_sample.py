@@ -241,16 +241,26 @@ def subsample_items_from_id(data_dir: str, valid_ids: set, news_len: int, n_news
 
     return item_dict
 
-def get_data_common_interactions(data_dir, n_news, n_users, news_len=30, min_hist_len=5, sample_name=None, save_path=None, test_time_thresh=None):
+def get_data_common_interactions(data_dir, n_news, n_users, news_len=30, min_hist_len=5, sample_name=None, save_path=None, test_time_thresh=None, overwrite_existing=False):
     try:
         os.listdir(data_dir)
     except:
         raise FileNotFoundError("Given data directory is wrong!")
 
+    save_path = Path(save_path)
+    if (save_path / sample_name).exists():
+        print("Directory already exists: {}".format(save_path / sample_name))
+        if not overwrite_existing:
+            print("Data will NOT be overwritten => Exit")
+            return (None, None, None)
+        # reply = str(input('Overwrite? (y/n): ')).lower().strip()
+        # if reply[0] != 'y':
+        #     return (None, None, None)
+
+
     n_news = int(n_news)
     n_users = int(n_users)
 
-    save_path = Path(save_path)
     #
     # subsample items
     if "most_common" == config.item_sample_method:
@@ -308,11 +318,13 @@ if __name__ == "__main__":
 
     parser.add_argument('--data_dir', type=str, default='../datasets/dpg/', help='data path')
     parser.add_argument('--save_path', type=str, default='../datasets/dpg/', help='path to save data')
+    #parser.add_argument('--sample_name', type=str, default='', help='name for directory')
+    parser.add_argument('--overwrite_existing', type=bool, default=True)
 
-    parser.add_argument('--item_sample_method', type=str, default='random', choices=['random', 'most_common'], help='')
-    parser.add_argument('--size', type=str, default='custom', help='size of dataset')
-    parser.add_argument('--n_articles', type=int, default=10000, help='number of articles')
-    parser.add_argument('--n_users', type=int, default=2000, help='number of users')
+    parser.add_argument('--item_sample_method', type=str, default='most_common', choices=['random', 'most_common'], help='')
+    parser.add_argument('--size', type=str, default='dev', choices=["dev", "medium", "custom"], help='size of dataset')
+    parser.add_argument('--n_articles', type=int, default=2000, help='number of articles')
+    parser.add_argument('--n_users', type=int, default=20000, help='number of users')
     parser.add_argument('--ratio_user_items', type=int, default=USER_ITEM_RATIO, help='ratio of user to items, e.g. 1 : 10')
 
     #parser.add_argument('--vocab_size', type=int, default=30000, help='vocab')
@@ -340,7 +352,8 @@ if __name__ == "__main__":
     news_data, user_data, logging_dates = get_data_common_interactions(config.data_dir, n_news, n_users,
                                                                        news_len=config.news_len, min_hist_len=config.min_hist_len,
                                                                        save_path=config.save_path, sample_name=sample_name,
-                                                                       test_time_thresh=threshold_date)
+                                                                       test_time_thresh=threshold_date,
+                                                                       overwrite_existing=config.overwrite_existing)
 
     for key, val in logging_dates.items():
         print("{} {}".format(key, datetime.datetime.fromtimestamp(val).strftime('%Y-%m-%d %H:%M:%S')))
