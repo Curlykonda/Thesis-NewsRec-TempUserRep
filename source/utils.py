@@ -89,9 +89,7 @@ def print_setting(config, valid_keys=None):
 #     return dataset, results, step
 
 def create_exp_name(config, n_exp=0, time='12:00', seperator='-'):
-
     sep = seperator #
-
     exp_name = "exp" + str(n_exp)
 
     if config.exp_name is not None:
@@ -104,13 +102,11 @@ def create_exp_name(config, n_exp=0, time='12:00', seperator='-'):
     return exp_name
 
 def save_metrics_as_pickle(metrics, res_path : Path, file_name : str):
-
     with open(res_path / (file_name + '.pkl'), 'wb') as fout:
         pickle.dump(metrics, fout, protocol=pickle.HIGHEST_PROTOCOL)
     print("Metrics saved to {}\n".format((res_path / (file_name + '.pkl'))))
 
 def save_config_as_json(config, res_path : Path):
-
     if not isinstance(config, dict):
         config = {key: val for key, val in vars(config).items()}
     with open(res_path / 'config.json', 'w') as fout:
@@ -138,7 +134,5 @@ def save_exp_name_label(config, res_path : Path, exp_name : str):
         json.dump(exp_dict, fout, indent=4)
 
 def create_exp_lbl_short(rel_items : dict):
-
     lbl = "-".join(list(map(str, rel_items.values())))
-
     return lbl
