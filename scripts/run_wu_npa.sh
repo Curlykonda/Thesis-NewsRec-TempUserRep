@@ -21,26 +21,33 @@ python --version
 
 #srun -n 2 -t 00:30:00 --pty bash -il
 
-datapath="../datasets/dpg/medium_time_split_most_common/"
 embeddings="../embeddings/cc.nl.300.bin"
 train="wu"
 eval="wu"
 
+datapath="../datasets/dpg/custom_u10_i100_time_split_most_common/"
+echo $datapath
+
+for SEED in {42..43}
+do
+  #1
+  python -u train_npa.py --data_path=$datapath --word_emb_path=$embeddings --exp_name="u10_i100_vanilla_npa" \
+  --npa_variant="vanilla" --random_seed=$SEED --n_epochs=10 --batch_size=100 --train_method=$train --eval_method=$eval
+
+  #2
+  python -u train_npa.py --data_path=$datapath --word_emb_path=$embeddings --exp_name="u10_i100_vanilla_npa" \
+  --npa_variant="vanilla" --random_seed=$SEED --n_epochs=10 --batch_size=100 --train_method=$train \
+  --eval_method="custom"  --test_act_func="softmax"
+done
+
+datapath="../datasets/dpg/medium_time_split_most_common/"
 echo $datapath
 
 for SEED in {42..43}
 do
   #1
   python -u train_npa.py --data_path=$datapath --word_emb_path=$embeddings --exp_name="med_vanilla_npa" \
-  --npa_variant="vanilla" --random_seed=$SEED --n_epochs=10 --batch_size=100 --train_method=$train --eval_method=$eval
+  --npa_variant="vanilla" --random_seed=$SEED --n_epochs=10 --batch_size=100 --train_method=$train \
+  --eval_method="custom"  --test_act_func="softmax" --lambda_l2=0.0005
 done
 
-datapath="../datasets/dpg/medium_time_split_random/"
-echo $datapath
-
-for SEED in {42..43}
-do
-  #1
-  python -u train_npa.py --data_path=$datapath --word_emb_path=$embeddings --exp_name="med_vanilla_npa" \
-  --npa_variant="vanilla" --random_seed=$SEED --n_epochs=10 --batch_size=100 --train_method=$train --eval_method=$eval
-done
