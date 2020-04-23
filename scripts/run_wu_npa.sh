@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --job-name=run_wu_npa
 #SBATCH -n 8
-#SBATCH -t 12:00:00
+#SBATCH -t 16:00:00
 #SBATCH -p gpu_shared
 #SBATCH --gres=gpu:1
 #SBATCH --mem=60000M
@@ -21,8 +21,8 @@ python --version
 
 #srun -n 2 -t 00:30:00 --pty bash -il
 
-data=(  "../datasets/dpg/medium_time_split_most_common/"
-        "../datasets/dpg/medium_time_split_random/")
+data=( "../datasets/dpg/medium_time_split_random/"
+        "../datasets/dpg/medium_time_split_most_common/")
 
 embeddings="../embeddings/cc.nl.300.bin"
 train="wu"
