@@ -10,6 +10,13 @@ class SimpleSum(nn.Module):
     def forward(self, extracted_interests):
         return torch.sum(extracted_interests)
 
+class SimpleMean(nn.Module):
+    def __init__(self):
+        pass
+
+    def forward(self, x):
+        return torch.mean(x)
+
 class LastHidden(nn.Module):
 
     def __init__(self):

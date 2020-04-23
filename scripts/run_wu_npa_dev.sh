@@ -24,11 +24,9 @@ data=(  "../datasets/dpg/dev_time_split_most_common/"
 embeddings="../embeddings/cc.nl.300.bin"
 train="wu"
 eval="wu"
-<<<<<<< HEAD
-exp_name="dev_vanilla_npa_LR"
-=======
+#exp_name="dev_vanilla_npa_LR"
 exp_name="dev_vanilla_npa_CE"
->>>>>>> test-losses
+
 
 echo $exp_name
 for datapath in "${data[@]}"
@@ -47,36 +45,10 @@ do
   python -u train_npa.py --data_path=$datapath --word_emb_path=$embeddings --exp_name=$exp_name \
   --npa_variant="vanilla" --random_seed=$SEED --n_epochs=10 --batch_size=100 --train_method=$train \
   --eval_method='custom' --lr=0.0001
-<<<<<<< HEAD
+
   #3
     python -u train_npa.py --data_path=$datapath --word_emb_path=$embeddings --exp_name=$exp_name \
   --npa_variant="vanilla" --random_seed=$SEED --n_epochs=10 --batch_size=100 --train_method=$train \
   --eval_method='custom' --lr=0.00001
 done
 done
-=======
-
-    python -u train_npa.py --data_path=$datapath --word_emb_path=$embeddings --exp_name=$exp_name \
-  --npa_variant="vanilla" --random_seed=$SEED --n_epochs=10 --batch_size=100 --train_method=$train \
-  --eval_method='custom' --lr=0.01
-done
-done
-#
-#datapath="../datasets/dpg/dev_time_split_random/"
-#
-#echo $datapath
-#for SEED in {42..43}
-#do
-#  #1
-#  python -u train_npa.py --data_path=$datapath --word_emb_path=$embeddings --exp_name=$exp_name \
-#  --npa_variant="vanilla" --random_seed=$SEED --n_epochs=10 --batch_size=100 --train_method=$train --eval_method=$eval
-#
-#  python -u train_npa.py --data_path=$datapath --word_emb_path=$embeddings --exp_name=$exp_name \
-#  --npa_variant="vanilla" --random_seed=$SEED --n_epochs=10 --batch_size=100 --train_method=$train \
-#  --eval_method='custom' --lr=0.0001
-#
-#    python -u train_npa.py --data_path=$datapath --word_emb_path=$embeddings --exp_name=$exp_name \
-#  --npa_variant="vanilla" --random_seed=$SEED --n_epochs=10 --batch_size=100 --train_method=$train \
-#  --eval_method='custom' --lr=0.01
-#done
->>>>>>> test-losses
