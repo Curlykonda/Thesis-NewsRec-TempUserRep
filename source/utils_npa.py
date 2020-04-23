@@ -127,7 +127,7 @@ def get_hyper_model_params(config):
 
     hyper_params['now'] = {'random_seed': config.random_seed,
                     'lr': config.lr, 'neg_sample_ratio': config.neg_sample_ratio, 'batch_size': config.batch_size,
-                    'lambda_l2': config.lambda_l2, 'weight_decay': config.weight_decay,
+                    'lambda_l2': config.lambda_l2,
                     'train_act_func': config.train_act_func, 'test_act_func': config.test_act_func,
                     'n_epochs': config.n_epochs, 'data_type': config.data_type
                     }
