@@ -472,7 +472,6 @@ if __name__ == "__main__":
 
     # optimiser
     parser.add_argument('--lr', type=float, default=0.001, help='Learning rate')
-    parser.add_argument('--weight_decay', type=float, default=0.0, help='weight decay as regularisation option')
 
     #logging
     parser.add_argument('--results_path', type=str, default='../results/', help='path to save metrics')

@@ -134,3 +134,6 @@ datasets/
 /embeddings/
 /saved_models/
 /results/
+
+#pycharm
+.idea
