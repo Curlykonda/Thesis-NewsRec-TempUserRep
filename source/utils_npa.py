@@ -122,33 +122,32 @@ def add_instance_to_data(data, u_id, hist, cands, lbls):
                  'labels': np.array(lbls, dtype='int32')})
 
 def get_hyper_model_params(config):
-    hyper_params = {}
+
     model_params = {}
 
-    hyper_params['now'] = {'random_seed': config.random_seed,
-                    'lr': config.lr, 'neg_sample_ratio': config.neg_sample_ratio, 'batch_size': config.batch_size,
-                    'lambda_l2': config.lambda_l2,
+    hyper_params = {'random_seed': config.random_seed,
+                    'lr': config.lr, 'neg_sample_ratio': config.neg_sample_ratio,
+                    'batch_size': config.batch_size, 'lambda_l2': config.lambda_l2,
                     'train_act_func': config.train_act_func, 'test_act_func': config.test_act_func,
                     'n_epochs': config.n_epochs, 'data_type': config.data_type
                     }
 
-    hyper_params['vanilla-NPA'] = {'random_seed': config.random_seed,
-                           'lr': 0.001, 'neg_sample_ratio': 4, 'batch_size': 100,
-                           'lambda_l2': 0,
-                           'train_act_func': "softmax", 'test_act_func': "sigmoid",
-                           'n_epochs': 20, 'data_type': config.data_type
-                           }
+    # hyper_params['vanilla-NPA'] = {'random_seed': config.random_seed,
+    #                        'lr': 0.001, 'neg_sample_ratio': 4, 'batch_size': 100,
+    #                        'lambda_l2': 0,
+    #                        'train_act_func': "softmax", 'test_act_func': "sigmoid",
+    #                        'n_epochs': 20, 'data_type': config.data_type
+    #                        }
 
     model_params['now'] = { 'dim_user_id': 50, 'dim_pref_query': 200, 'dim_words': 300,
-                            'max_title_len': 30, 'interest_extractor': None}
+                            'max_title_len': config.max_hist_len, 'max_news_len': config.max_news_len}
 
     model_params['vanilla-NPA'] = {'dim_user_id': 50, 'dim_pref_query': 200, 'dim_words': 300,
-                                    'max_title_len': 30, 'max_hist_len': 50,
-                                   'interest_extractor': None}
+                                    'max_news_len': 30, 'max_hist_len': 50 }
     if "vanilla" == config.npa_variant:
-        return hyper_params['vanilla-NPA'], model_params['vanilla-NPA']
+        return hyper_params, model_params['vanilla-NPA']
     else:
-        return hyper_params['now'], model_params['now']
+        return hyper_params, model_params['now']
 
 def prep_dpg_user_file(user_file, news_file, art_id2idx, train_method, test_interval_days : int, neg_sample_ratio=4, max_hist_len=50, preserve_seq=False):
     '''
@@ -329,9 +328,6 @@ def prep_dpg_user_file(user_file, news_file, art_id2idx, train_method, test_inte
             raise NotImplementedError()
         else:
             raise KeyError()
-
-
-
 
     #
     #reformat to np int arrays
@@ -687,9 +683,6 @@ def preprocess_user_file_wu(data_path='ClickData4.tsv', npratio=4):
 
 
 def main(config):
-    '''
-    holthaus
-    '''
 
     if config.data_type not in DATA_TYPES:
         raise KeyError("{} is not a known data format".format(config.data_type))

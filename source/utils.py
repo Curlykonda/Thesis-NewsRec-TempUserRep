@@ -1,9 +1,14 @@
 import json
 import pickle
+import random
 from pathlib import Path
 import sys
-sys.path.append("..")
 
+import numpy as np
+import torch
+from torch.backends import cudnn
+
+sys.path.append("..")
 
 
 def pad_sequence(seq, max_len, pad_value=0, pad='post', trunc='last'):
@@ -100,6 +105,14 @@ def create_exp_name(config, n_exp=0, time='12:00', seperator='-'):
                + sep + str(config.random_seed) \
                + sep + str(time)
     return exp_name
+
+def set_random_seeds(rnd_seed):
+    random.seed(rnd_seed)
+    torch.manual_seed(rnd_seed)
+    torch.cuda.manual_seed_all(rnd_seed)
+    np.random.seed(rnd_seed)
+    cudnn.deterministic = True
+    cudnn.benchmark = False
 
 def save_metrics_as_pickle(metrics, res_path : Path, file_name : str):
     with open(res_path / (file_name + '.pkl'), 'wb') as fout:

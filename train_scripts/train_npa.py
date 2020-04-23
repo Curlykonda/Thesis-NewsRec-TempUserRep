@@ -23,7 +23,7 @@ sys.path.append("..")
 from source.my_datasets import DPG_Dataset
 from source.models.NPA import VanillaNPA, init_weights
 from source.utils_npa import get_dpg_data_processed, get_embeddings_from_pretrained, get_hyper_model_params
-from source.utils import print_setting, save_metrics_as_pickle, save_config_as_json, create_exp_name, save_exp_name_label
+from source.utils import *
 from source.metrics import *
 
 def try_var_loss_funcs(logits, targets, i_batch):
@@ -253,9 +253,8 @@ def main(config):
     hyper_params, model_params = get_hyper_model_params(config)
 
     #set random seeds
-    torch.manual_seed(config.random_seed)
-    torch.cuda.manual_seed(config.random_seed)
-    np.random.seed(config.random_seed)
+    set_rnd_seeds(config.random_seed)
+
 
     # Get & prepare data
     # data is indexed by user_ids
