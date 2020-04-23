@@ -179,7 +179,8 @@ def train_npa_actfunc(npa_model, criterion, optim, train_generator, act_func="so
             raise NotImplementedError()
 
         # compute loss
-        loss_bce = criterion(y_probs, lbls)
+        loss_bce = criterion(y_probs, lbls) # nn.BCE() -> torch.tensor(val, Backward)
+        #loss_ce = nn.CrossEntropyLoss()(logits, lbls.argmax(dim=1))
 
         loss_l2 = None
         for param in npa_model.parameters():
@@ -190,8 +191,10 @@ def train_npa_actfunc(npa_model, criterion, optim, train_generator, act_func="so
 
         if 0 < config.lambda_l2:
             loss_total = loss_bce + loss_l2 * config.lambda_l2
+            #loss_total = loss_ce + loss_l2 * config.lambda_l2
         else:
             loss_total = loss_bce
+            #loss_total = loss_ce
 
         # optimiser backward
         optim.zero_grad()
@@ -213,7 +216,6 @@ def train_npa_actfunc(npa_model, criterion, optim, train_generator, act_func="so
             auc = roc_auc_score(y_true, y_scores),  # TPR v. FPR with varying threshold
             ap = average_precision_score(y_true, y_scores)
         except ValueError:
-            #print("holthaus")
             auc, ap = zip(*[(roc_auc_score(y, pred), average_precision_score(y, pred)) for y, pred in zip(y_true, y_scores)])
 
             auc = np.mean(auc)
@@ -295,7 +297,7 @@ def main(config):
         optim = torch.optim.Adam(npa_model.parameters(), lr=0.001)
         config.train_act_func = "softmax"
         config.test_act_func = "sigmoid"
-        #config.test_w_one = False
+
     else:
         optim = torch.optim.Adam(npa_model.parameters(), lr=config.lr) #, weight_decay=config.weight_decay
     #Adam(params, lr=0.001, betas=(0.9, 0.999), eps=1e-08, weight_decay=0, amsgrad=False) default
@@ -430,7 +432,7 @@ if __name__ == "__main__":
 
     # input data
     parser.add_argument('--data_type', type=str, default='DPG', help='options for data format: DPG, NPA or Adressa ')
-    parser.add_argument('--data_path', type=str, default='../datasets/dpg/dev_time_split_interactions/', help='path to data directory') # dev : i10k_u5k_s30/
+    parser.add_argument('--data_path', type=str, default='../datasets/dpg/dev_time_split_most_common/', help='path to data directory') # dev : i10k_u5k_s30/
     parser.add_argument('--word_emb_path', type=str, default='../embeddings/glove_eng.840B.300d.txt', help='path to directory with word embeddings')
     parser.add_argument('--load_prep_data', type=bool, default=True, help="use existing, pre-processed data")
 
