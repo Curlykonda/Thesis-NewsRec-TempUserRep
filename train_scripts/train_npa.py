@@ -97,7 +97,8 @@ def test_npa_act_func(model, test_generator, act_func="sigmoid"):
             y_probs_cpu = y_probs.detach().cpu()
 
             # compute loss
-            test_loss = nn.BCELoss()(y_probs, lbls)
+            #test_loss = nn.BCELoss()(y_probs, lbls)
+            test_loss = nn.CrossEntropyLoss()(logits, lbls.argmax(dim=1))
             #
             # aggregate predictions per user because each user can have various test samples
             for idx, u_id in enumerate(user_ids):
@@ -179,8 +180,8 @@ def train_npa_actfunc(npa_model, criterion, optim, train_generator, act_func="so
             raise NotImplementedError()
 
         # compute loss
-        loss_bce = criterion(y_probs, lbls) # nn.BCE() -> torch.tensor(val, Backward)
-        #loss_ce = nn.CrossEntropyLoss()(logits, lbls.argmax(dim=1))
+        #loss_bce = criterion(y_probs, lbls) # nn.BCE() -> torch.tensor(val, Backward)
+        loss_ce = criterion(logits, lbls.argmax(dim=1))
 
         loss_l2 = None
         for param in npa_model.parameters():
@@ -190,11 +191,11 @@ def train_npa_actfunc(npa_model, criterion, optim, train_generator, act_func="so
                 loss_l2 = loss_l2 + param.norm(2)
 
         if 0 < config.lambda_l2:
-            loss_total = loss_bce + loss_l2 * config.lambda_l2
-            #loss_total = loss_ce + loss_l2 * config.lambda_l2
+            #loss_total = loss_bce + loss_l2 * config.lambda_l2
+            loss_total = loss_ce + loss_l2 * config.lambda_l2
         else:
-            loss_total = loss_bce
-            #loss_total = loss_ce
+            #loss_total = loss_bce
+            loss_total = loss_ce
 
         # optimiser backward
         optim.zero_grad()
@@ -224,7 +225,7 @@ def train_npa_actfunc(npa_model, criterion, optim, train_generator, act_func="so
         # gini coefficient
         #gini = 2*auc - 1 # normalize AUC: random classifier scores 0, and a perfect one scores 1
 
-        metrics_epoch.append((loss_bce.item(),
+        metrics_epoch.append((loss_ce.item(),
                               compute_acc_tensors(y_probs.cpu(), lbls.cpu()),
                               auc,
                               ap, # \text{AP} = \sum_n (R_n - R_{n-1}) P_n
@@ -291,7 +292,9 @@ def main(config):
     #npa_model.apply(init_weights)
     #
     #optim & loss
-    criterion = nn.BCELoss() # raw_scores (logits) -> Softmax -> BCE loss
+    #criterion = nn.BCELoss() # raw_scores (logits) -> Softmax -> BCE loss
+    criterion = nn.CrossEntropyLoss()
+
     if config.eval_method == 'wu':
         # create original NPA train and test setting
         optim = torch.optim.Adam(npa_model.parameters(), lr=0.001)
@@ -355,10 +358,10 @@ def main(config):
         metrics_test = log_metrics(epoch, metrics_epoch, metrics_test, writer, mode='test', method=config.log_method)
 
         print("\n {} epoch".format(epoch))
-        print("TRAIN: BCE loss {:0.3f} \t ACC {:0.3f} \t AUC {:0.3f} \t AP {:0.3f} \t MRR {:0.3f} \t in {:0.1f} min".format(
+        print("TRAIN: CE loss {:0.3f} \t ACC {:0.3f} \t AUC {:0.3f} \t AP {:0.3f} \t MRR {:0.3f} \t in {:0.1f} min".format(
                 metrics_train['loss'][-1], metrics_train['acc'][-1], metrics_train['auc'][-1], metrics_train['ap'][-1],
                 metrics_train['mrr'][-1], (t1-t0)/60))
-        print("TEST: BCE loss {:0.3f}  \t acc {:0.3f} \t auc {:0.3f} \t ap {:0.3f} \t MRR {:0.3f} \t in {:0.1f} min".format(
+        print("TEST: CE loss {:0.3f}  \t acc {:0.3f} \t auc {:0.3f} \t ap {:0.3f} \t MRR {:0.3f} \t in {:0.1f} min".format(
                 metrics_test['loss'][-1], metrics_test['acc'][-1], metrics_test['auc'][-1], metrics_test['ap'][-1],
                 metrics_train['mrr'][-1], (t2-t1)/60))
         print("L2 norm model params: {:0.1f}".format(metrics_train['loss_l2'][-1]))
@@ -472,7 +475,6 @@ if __name__ == "__main__":
 
     # optimiser
     parser.add_argument('--lr', type=float, default=0.001, help='Learning rate')
-    parser.add_argument('--weight_decay', type=float, default=0.0, help='weight decay as regularisation option')
 
     #logging
     parser.add_argument('--results_path', type=str, default='../results/', help='path to save metrics')
