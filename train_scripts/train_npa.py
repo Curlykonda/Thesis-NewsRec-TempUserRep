@@ -306,7 +306,8 @@ def main(config):
     #Adam(params, lr=0.001, betas=(0.9, 0.999), eps=1e-08, weight_decay=0, amsgrad=False) default
 
     print(device)
-    print_setting(config, ['random_seed', 'train_method', 'eval_method', 'lambda_l2', 'train_act_func', 'test_act_func', 'data_path'])
+    print_setting(config, ['random_seed', 'train_method', 'eval_method', 'lambda_l2', 'train_act_func', 'test_act_func',
+                           'data_path', 'lr'])
 
     # create dir for logging
     now = datetime.now()
