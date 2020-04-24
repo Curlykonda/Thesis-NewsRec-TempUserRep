@@ -102,8 +102,9 @@ def create_exp_name(config, n_exp=0, time='12:00', seperator='-'):
         exp_name += sep
 
     exp_name += config.eval_method \
-               + sep + str(config.random_seed) \
-               + sep + str(time)
+                + sep + "lr{:.0E}".format(config.lr) \
+                + sep + "seed" + str(config.random_seed) \
+                + sep + "T" + str(time)
     return exp_name
 
 def set_random_seeds(rnd_seed):

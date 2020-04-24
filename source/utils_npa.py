@@ -123,13 +123,12 @@ def add_instance_to_data(data, u_id, hist, cands, lbls):
 
 def get_hyper_model_params(config):
 
-    model_params = {}
-
     hyper_params = {'random_seed': config.random_seed,
                     'lr': config.lr, 'neg_sample_ratio': config.neg_sample_ratio,
                     'batch_size': config.batch_size, 'lambda_l2': config.lambda_l2,
                     'train_act_func': config.train_act_func, 'test_act_func': config.test_act_func,
-                    'n_epochs': config.n_epochs, 'data_type': config.data_type
+                    'n_epochs': config.n_epochs, 'data_type': config.data_type,
+                    'data_path': config.data_path
                     }
 
     # hyper_params['vanilla-NPA'] = {'random_seed': config.random_seed,
@@ -139,15 +138,14 @@ def get_hyper_model_params(config):
     #                        'n_epochs': 20, 'data_type': config.data_type
     #                        }
 
-    model_params['now'] = { 'dim_user_id': 50, 'dim_pref_query': 200, 'dim_words': 300,
-                            'max_title_len': config.max_hist_len, 'max_news_len': config.max_news_len}
-
-    model_params['vanilla-NPA'] = {'dim_user_id': 50, 'dim_pref_query': 200, 'dim_words': 300,
-                                    'max_news_len': 30, 'max_hist_len': 50 }
     if "vanilla" == config.npa_variant:
-        return hyper_params, model_params['vanilla-NPA']
+        model_params = {'dim_user_id': 50, 'dim_pref_query': 200, 'dim_words': 300,
+                        'max_news_len': 30, 'max_hist_len': 50}
     else:
-        return hyper_params, model_params['now']
+        model_params = {'dim_user_id': 50, 'dim_pref_query': 200, 'dim_words': 300,
+                        'max_title_len': config.max_hist_len, 'max_news_len': config.max_news_len}
+
+    return hyper_params, model_params
 
 def prep_dpg_user_file(user_file, news_file, art_id2idx, train_method, test_interval_days : int, neg_sample_ratio=4, max_hist_len=50, preserve_seq=False):
     '''

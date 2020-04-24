@@ -253,8 +253,7 @@ def main(config):
     hyper_params, model_params = get_hyper_model_params(config)
 
     #set random seeds
-    set_rnd_seeds(config.random_seed)
-
+    set_random_seeds(config.random_seed)
 
     # Get & prepare data
     # data is indexed by user_ids
@@ -296,12 +295,12 @@ def main(config):
 
     if config.eval_method == 'wu':
         # create original NPA train and test setting
-        optim = torch.optim.Adam(npa_model.parameters(), lr=0.001)
+        optim = torch.optim.Adam(npa_model.parameters(), lr=config.lr)
         config.train_act_func = "softmax"
         config.test_act_func = "sigmoid"
 
     else:
-        optim = torch.optim.Adam(npa_model.parameters(), lr=config.lr) #, weight_decay=config.weight_decay
+        optim = torch.optim.Adam(npa_model.parameters(), lr=config.lr)
     #Adam(params, lr=0.001, betas=(0.9, 0.999), eps=1e-08, weight_decay=0, amsgrad=False) default
 
     print(device)
@@ -452,11 +451,11 @@ if __name__ == "__main__":
                         help='Method for network training & format of training samples: [wu, pos_cut_off, masked_interests]')
 
     #model params
-    parser.add_argument('--npa_variant', type=str, default='vanilla', help='[vanilla, custom]')
-    parser.add_argument('--news_encoder', type=str, default=None, help='[wu_cnn, kim_cnn, gru, bert, sum, avg_sum]')
-    parser.add_argument('--user_encoder', type=str, default=None, help='[None, pers_attn, gru, bert, avg_sum]')
+    parser.add_argument('--npa_variant', type=str, default='vanilla', choices=['vanilla', 'custom'])
 
-    parser.add_argument('--interest_extractor', type=str, default=None, help='[None, gru]')
+    parser.add_argument('--news_encoder', type=str, default="wu_cnn", choices=['wu_cnn', 'kim_cnn', 'gru', 'bert', 'sum', 'mean'])
+    parser.add_argument('--user_encoder', type=str, default="pers_attn", choices=['None', 'pers_attn', 'gru', 'bert', 'mean'])
+    parser.add_argument('--interest_extractor', type=str, default=None, choices=['None', 'gru'])
 
 
     #training
@@ -469,7 +468,6 @@ if __name__ == "__main__":
     parser.add_argument('--test_act_func', type=str, default='sigmoid', choices=['softmax', 'sigmoid'],
                         help='Output activation func Testing: [softmax, sigmoid]')
     parser.add_argument('--log_method', type=str, default='epoch', help='Mode for logging the metrics: [epoch, batches]')
-    #parser.add_argument('--test_w_one', type=bool, default=False, help='use only 1 candidate during testing')
     parser.add_argument('--eval_method', type=str, default='wu', choices=['wu', 'custom'], help='Mode for evaluating NPA model')
 
 
