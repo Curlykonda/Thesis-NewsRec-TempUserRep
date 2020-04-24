@@ -21,8 +21,8 @@ python --version
 
 #srun -n 2 -t 00:30:00 --pty bash -il
 
-data=( "../datasets/dpg/medium_time_split_random/"
-        "../datasets/dpg/medium_time_split_most_common/")
+data=("../datasets/dpg/medium_time_split_random/")
+#"../datasets/dpg/medium_time_split_most_common/"
 
 embeddings="../embeddings/cc.nl.300.bin"
 train="wu"
@@ -41,12 +41,16 @@ for SEED in "${SEDDS[@]}"
 do
   #1
   python -u train_npa.py --data_path=$datapath --word_emb_path=$embeddings --exp_name=$exp_name \
-  --npa_variant="vanilla" --random_seed=$SEED --n_epochs=$n_epochs --batch_size=$batch_size --train_method=$train \
-  --eval_method=$eval
+  --npa_variant="vanilla" --random_seed=$SEED --n_epochs=$n_epochs --batch_size=$batch_size --train_method=$train
+
   #2
   python -u train_npa.py --data_path=$datapath --word_emb_path=$embeddings --exp_name=$exp_name \
   --npa_variant="vanilla" --random_seed=$SEED --n_epochs=$n_epochs --batch_size=$batch_size  --train_method=$train \
-  --eval_method='custom' --lr=0.0001
+  --lr=0.0001
 
+  #3
+  python -u train_npa.py --data_path=$datapath --word_emb_path=$embeddings --exp_name=$exp_name \
+  --npa_variant="vanilla" --random_seed=$SEED --n_epochs=$n_epochs --batch_size=$batch_size  --train_method=$train \
+  --lr=0.0005
 done
 done
