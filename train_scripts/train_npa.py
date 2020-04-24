@@ -308,28 +308,14 @@ def main(config):
                            'data_path', 'lr'])
 
     # create dir for logging
-    now = datetime.now()
-    date = now.strftime("%m-%d-%y")
+    exp_name, res_path = create_exp_name(config)
 
-    res_path = Path(config.results_path)
-    res_path = res_path / date
-    try:
-        n_exp = len(os.listdir(res_path)) + 1
-    except:
-        n_exp = 1
-
-    exp_name = create_exp_name(config, n_exp, time=now.strftime("%H:%M"))
-    res_path = res_path / exp_name
-    res_path.mkdir(parents=True, exist_ok=True)
     writer = SummaryWriter(res_path) # logging
-
     writer.add_hparams(hparam_dict=hyper_params, metric_dict={'test': 0.1})
 
     metrics_train = defaultdict(list)
     metrics_test = defaultdict(list)
-
-    print_shapes = False
-    DEBUG = True
+    #
     #
     ##########################
     # training

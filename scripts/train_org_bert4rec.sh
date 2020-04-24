@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=bert4rec_ml1
+#SBATCH --job-name=bert4rec_ML20m
 #SBATCH -n 4
 #SBATCH -t 06:00:00
 #SBATCH -p gpu_shared
@@ -21,7 +21,7 @@ python --version
 
 #embeddings="../embeddings/cc.nl.300.bin"
 
-exp_name="bert4rec_ml1"
+exp_name="bert4rec_ML20m"
 
 
 echo $exp_name
@@ -29,5 +29,5 @@ echo $exp_name
 #for SEED in {42..43}
 #do
   #1
-  printf '1\ny\n' | python main.py --template train_bert
+  printf '20\ny\n' | python main.py --template train_bert
 #done

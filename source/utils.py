@@ -1,4 +1,6 @@
+import datetime
 import json
+import os
 import pickle
 import random
 from pathlib import Path
@@ -93,7 +95,18 @@ def print_setting(config, valid_keys=None):
 #
 #     return dataset, results, step
 
-def create_exp_name(config, n_exp=0, time='12:00', seperator='-'):
+def create_exp_name(config, seperator='_'):
+
+    now = datetime.datetime.now()
+    date = now.strftime("%m-%d-%y")
+
+    res_path = Path(config.results_path)
+    res_path = res_path / date
+    try:
+        n_exp = len(os.listdir(res_path)) + 1
+    except:
+        n_exp = 1
+
     sep = seperator #
     exp_name = "exp" + str(n_exp)
 
@@ -104,8 +117,13 @@ def create_exp_name(config, n_exp=0, time='12:00', seperator='-'):
     exp_name += config.eval_method \
                 + sep + "lr{:.0E}".format(config.lr) \
                 + sep + "seed" + str(config.random_seed) \
-                + sep + "T" + str(time)
-    return exp_name
+                + sep + "T" + str(now.strftime("%H:%M"))
+
+    print(exp_name)
+    res_path = res_path / exp_name
+    res_path.mkdir(parents=True, exist_ok=True)
+
+    return exp_name, res_path
 
 def set_random_seeds(rnd_seed):
     random.seed(rnd_seed)

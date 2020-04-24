@@ -131,13 +131,6 @@ def get_hyper_model_params(config):
                     'data_path': config.data_path
                     }
 
-    # hyper_params['vanilla-NPA'] = {'random_seed': config.random_seed,
-    #                        'lr': 0.001, 'neg_sample_ratio': 4, 'batch_size': 100,
-    #                        'lambda_l2': 0,
-    #                        'train_act_func': "softmax", 'test_act_func': "sigmoid",
-    #                        'n_epochs': 20, 'data_type': config.data_type
-    #                        }
-
     if "vanilla" == config.npa_variant:
         model_params = {'dim_user_id': 50, 'dim_pref_query': 200, 'dim_words': 300,
                         'max_news_len': 30, 'max_hist_len': 50}
