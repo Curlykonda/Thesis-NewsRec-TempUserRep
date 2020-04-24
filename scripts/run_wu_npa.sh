@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=run_wu_npa
+#SBATCH --job-name=van_npa_m_common
 #SBATCH -n 8
 #SBATCH -t 16:00:00
 #SBATCH -p gpu_shared
@@ -21,8 +21,8 @@ python --version
 
 #srun -n 2 -t 00:30:00 --pty bash -il
 
-data=("../datasets/dpg/medium_time_split_random/")
-#"../datasets/dpg/medium_time_split_most_common/"
+data=("../datasets/dpg/medium_time_split_most_common/")
+#"../datasets/dpg/medium_time_split_random/"
 
 embeddings="../embeddings/cc.nl.300.bin"
 train="wu"
