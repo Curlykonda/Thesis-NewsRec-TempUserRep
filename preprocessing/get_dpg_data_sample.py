@@ -92,7 +92,7 @@ def update_logging_dates(articles_read, logging_dates):
     return (first, last)
 
 
-def subsample_users(n_users, item_data, data_dir, min_hist_len, remove_unk_arts=True, test_time_thresh=None):
+def subsample_users(n_users, item_data, data_dir, min_hist_len, max_hist_len=None, remove_unk_arts=True, test_time_thresh=None):
 
     if isinstance(item_data, dict):
         # use a given item sub sample
@@ -117,9 +117,12 @@ def subsample_users(n_users, item_data, data_dir, min_hist_len, remove_unk_arts=
 
     logging_dates = (None, None) # first & last reading date
 
+    if max_hist_len is None:
+        max_hist_len = int(1e10)
+
     for i, user in tqdm(enumerate(data_stream_generator(data_dir + "users"))):
         # quick preliminary eval
-        if len(user['articles_read']) >= min_hist_len:
+        if len(user['articles_read']) >= min_hist_len and len(user['articles_read']) <= max_hist_len:
             # remove unknown articles from reading history
             if remove_unk_arts:
                 history = []
@@ -150,8 +153,9 @@ def subsample_users(n_users, item_data, data_dir, min_hist_len, remove_unk_arts=
                 user['articles_read'] = history
 
             # evaluate length reading history
-            if len(user['articles_read']) >= min_hist_len:
-                # add valid user that fulfills min read condition
+            if len(user['articles_read']) >= min_hist_len and len(user['articles_read']) <= max_hist_len:
+                # add valid user that fulfills condition
+                # exclude very high frequency users (potentially bots) and very low ones (too little interaction for proper modelling)
                 # item.keys() = dict_keys(['user_id', 'articles_read', 'opened_pushes', 'articles_pushed'])
                 user['articles_read'] = sorted(user['articles_read'], key=lambda entry: entry[2])  # sort by time_stamp
 
@@ -241,7 +245,7 @@ def subsample_items_from_id(data_dir: str, valid_ids: set, news_len: int, n_news
 
     return item_dict
 
-def get_data_common_interactions(data_dir, n_news, n_users, news_len=30, min_hist_len=5, sample_name=None, save_path=None, test_time_thresh=None, overwrite_existing=False):
+def get_data_common_interactions(data_dir, n_news, n_users, news_len=30, min_hist_len=5, max_hist_len=None, sample_name=None, save_path=None, test_time_thresh=None, overwrite_existing=False):
     try:
         os.listdir(data_dir)
     except:
@@ -286,7 +290,9 @@ def get_data_common_interactions(data_dir, n_news, n_users, news_len=30, min_his
 
     # subsample users
     print("Sample users ...")
-    user_data, logging_dates = subsample_users(n_users, news_data, data_dir, min_hist_len, test_time_thresh=test_time_thresh)
+    user_data, logging_dates = subsample_users(n_users, news_data, data_dir, min_hist_len,
+                                               max_hist_len=max_hist_len,
+                                               test_time_thresh=test_time_thresh)
 
     logging_dates = {'start': logging_dates[0], 'end': logging_dates[1]}
 
@@ -332,6 +338,8 @@ if __name__ == "__main__":
 
     parser.add_argument('--news_len', type=int, default=30, help='number of words from news body')
     parser.add_argument('--min_hist_len', type=int, default=5, help='minimum number of articles in reading history')
+    parser.add_argument('--max_hist_len', type=int, default=260, help='max number of articles in reading history')
+
 
     config = parser.parse_args()
 
@@ -349,11 +357,15 @@ if __name__ == "__main__":
 
     threshold_date = int(datetime.datetime.strptime(config.time_threshold, '%d-%m-%Y-%H-%M-%S').strftime("%s")) #1577228399
 
-    news_data, user_data, logging_dates = get_data_common_interactions(config.data_dir, n_news, n_users,
-                                                                       news_len=config.news_len, min_hist_len=config.min_hist_len,
-                                                                       save_path=config.save_path, sample_name=sample_name,
-                                                                       test_time_thresh=threshold_date,
-                                                                       overwrite_existing=config.overwrite_existing)
+    if "wu" == config.item_sample_method:
+        pass
+    else:
+        news_data, user_data, logging_dates = get_data_common_interactions(config.data_dir, n_news, n_users,
+                                                                           news_len=config.news_len,
+                                                                           min_hist_len=config.min_hist_len,
+                                                                           save_path=config.save_path, sample_name=sample_name,
+                                                                           test_time_thresh=threshold_date,
+                                                                           overwrite_existing=config.overwrite_existing)
 
     for key, val in logging_dates.items():
         print("{} {}".format(key, datetime.datetime.fromtimestamp(val).strftime('%Y-%m-%d %H:%M:%S')))
