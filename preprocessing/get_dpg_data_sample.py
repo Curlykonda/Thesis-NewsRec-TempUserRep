@@ -92,24 +92,22 @@ def update_logging_dates(articles_read, logging_dates):
     return (first, last)
 
 
-def subsample_users(n_users, item_data, data_dir, min_hist_len, max_hist_len=None, remove_unk_arts=True, test_time_thresh=None):
+def subsample_users(n_users, article_data, data_dir, min_hist_len, max_hist_len=None, remove_unk_arts=True, test_time_thresh=None):
 
-    if isinstance(item_data, dict):
+    if isinstance(article_data, dict):
         # use a given item sub sample
-        valid_item_ids = set(item_data['all'].keys())
-        n_max_items = len(item_data['all'])
-    elif isinstance(item_data, int):
-        valid_item_ids = set()
-        n_max_items = item_data
-        item_data = {'all': set()}
-
+        valid_item_ids = set(article_data['all'].keys())
+        n_max_items = len(article_data['all'])
+    elif isinstance(article_data, set):
+        valid_item_ids = article_data
+        article_data = {}
 
     c_articles_raw = Counter() # without threshold
     c_articles_thresh = Counter() # count only those from 'valid' histories
 
     if test_time_thresh is not None:
-        item_data['train'] = set()
-        item_data['test'] = set()
+        article_data['train'] = set()
+        article_data['test'] = set()
 
     user_dict = OrderedDict()
     unk_arts = defaultdict(int)
@@ -163,11 +161,11 @@ def subsample_users(n_users, item_data, data_dir, min_hist_len, max_hist_len=Non
                     if len(user['articles_train']) >= min_hist_len:
                         #
                         art_train = [art_id for _, art_id, _ in user['articles_train']]
-                        item_data['train'].update(art_train)
+                        article_data['train'].update(art_train)
                         c_articles_thresh.update(art_train)
 
                         art_test = [art_id for _, art_id, _ in user['articles_test']]
-                        item_data['test'].update(art_test)
+                        article_data['test'].update(art_test)
                         c_articles_thresh.update(art_test)
                     else:
                         continue
@@ -187,7 +185,7 @@ def subsample_users(n_users, item_data, data_dir, min_hist_len, max_hist_len=Non
     #print("Users sampled {}".format(len(user_dict)))
     print("\n Start logging date: {} \t End: {}".format(*logging_dates))
 
-    return user_dict, logging_dates
+    return user_dict, article_data, logging_dates
 
 def count_article_interactions(data_dir, n_users=None):
 
@@ -211,8 +209,8 @@ def count_article_interactions(data_dir, n_users=None):
     return c_art_ids
 
 def subsample_items_from_id(data_dir: str, valid_ids: set, news_len: int, n_news: int, add_items=False, keys_to_exclude = ["short_id", "url"], test_time_thresh=None):
-    item_dict = OrderedDict()
-    item_dict['all'] = {}
+    article_dict = OrderedDict()
+    article_dict['all'] = {}
 
     if add_items:
         additional_items = n_news - (len(valid_ids) if valid_ids is not None else 0)
@@ -228,7 +226,7 @@ def subsample_items_from_id(data_dir: str, valid_ids: set, news_len: int, n_news
 
             item['n_words'] = get_n_words(item['text'])
             val_dict = {key: val for (key, val) in item.items() if key not in keys_to_exclude}
-            item_dict['all'][item['short_id']] = val_dict
+            article_dict['all'][item['short_id']] = val_dict
 
             #item['pub_date'] = (item['first_pub_date'] if item['first_pub_date'] is not None else item['pub_date'])
             # currently no pub_date available [30.03.]
@@ -237,13 +235,34 @@ def subsample_items_from_id(data_dir: str, valid_ids: set, news_len: int, n_news
                 additional_items -= 1
 
         else:
-            if n_news == len(item_dict['all']):
+            if n_news == len(article_dict['all']):
                 break
 
         if i % 1e5 == 0 and i>0:
             print("{} items scanned ..".format(i))
 
-    return item_dict
+    return article_dict
+
+def save_data_to_dir(save_path, sample_name, news_data, user_data, logging_dates):
+
+    # save data
+    if save_path is not None:
+        save_path = Path(save_path)
+
+        if sample_name is None:
+            sample_name = ('i{}k_u{}k_s{}'.format(int(n_news/1e3), int(n_users/1e3), news_len))
+        save_path = save_path / sample_name
+        save_path.mkdir(parents=True, exist_ok=True)
+
+        with open(save_path / 'news_data.pkl', 'wb') as fout:
+            pickle.dump(news_data, fout)
+
+        with open(save_path / 'user_data.pkl', 'wb') as fout:
+            pickle.dump(user_data, fout)
+
+        with open(save_path / 'logging_dates.json', 'w') as fout:
+            json.dump(logging_dates, fout)
+
 
 def get_data_common_interactions(data_dir, n_news, n_users, news_len=30, min_hist_len=5, max_hist_len=None, sample_name=None, save_path=None, test_time_thresh=None, overwrite_existing=False):
     try:
@@ -260,7 +279,6 @@ def get_data_common_interactions(data_dir, n_news, n_users, news_len=30, min_his
         # reply = str(input('Overwrite? (y/n): ')).lower().strip()
         # if reply[0] != 'y':
         #     return (None, None, None)
-
 
     n_news = int(n_news)
     n_users = int(n_users)
@@ -290,7 +308,7 @@ def get_data_common_interactions(data_dir, n_news, n_users, news_len=30, min_his
 
     # subsample users
     print("Sample users ...")
-    user_data, logging_dates = subsample_users(n_users, news_data, data_dir, min_hist_len,
+    user_data, news_data, logging_dates = subsample_users(n_users, news_data, data_dir, min_hist_len,
                                                max_hist_len=max_hist_len,
                                                test_time_thresh=test_time_thresh)
 
@@ -299,24 +317,71 @@ def get_data_common_interactions(data_dir, n_news, n_users, news_len=30, min_his
     if test_time_thresh is not None:
         logging_dates['threshold'] = test_time_thresh
 
-    # save data
-    if save_path is not None:
-
-        if sample_name is None:
-            sample_name = ('i{}k_u{}k_s{}'.format(int(n_news/1e3), int(n_users/1e3), news_len))
-        save_path = save_path / sample_name
-        save_path.mkdir(parents=True, exist_ok=True)
-
-        with open(save_path / 'news_data.pkl', 'wb') as fout:
-            pickle.dump(news_data, fout)
-
-        with open(save_path / 'user_data.pkl', 'wb') as fout:
-            pickle.dump(user_data, fout)
-
-        with open(save_path / 'logging_dates.json', 'w') as fout:
-            json.dump(logging_dates, fout)
-
     return news_data, user_data, logging_dates
+
+
+def get_all_item_ids(data_dir):
+    item_ids = set()
+
+    for i, item in enumerate(data_stream_generator(data_dir + "items")):
+        # item.keys() = dict_keys(['text', 'pub_date', 'author', 'url', 'short_id'])
+        item_ids.add(item['short_id'])
+        if i % 1e5 == 0 and i > 0:
+            print("{} items scanned ..".format(i))
+
+    return item_ids
+
+
+def get_data_wu_sampling(data_dir, n_users, news_len, min_hist_len, max_hist_len, save_path, sample_name,
+                         test_time_thresh, overwrite_existing):
+    try:
+        os.listdir(data_dir)
+    except:
+        raise FileNotFoundError("Given data directory is wrong!")
+
+    save_path = Path(save_path)
+    if (save_path / sample_name).exists():
+        print("Directory already exists: {}".format(save_path / sample_name))
+        if not overwrite_existing:
+            print("Data will NOT be overwritten => Exit")
+            return (None, None, None)
+
+    #read in all valid item ids
+    f_name_all_item_ids = "all_item_ids.pkl"
+    try:
+        with open(data_dir + "/" + f_name_all_item_ids, 'rb') as fin:
+            all_item_ids = pickle.load(fin)
+    except:
+        print("Did not find {} in {}. Continue to create this first".format(f_name_all_item_ids, data_dir))
+
+        all_item_ids = get_all_item_ids(data_dir)
+
+        with open(data_dir + "/" + f_name_all_item_ids, 'wb') as fout:
+            pickle.dump(all_item_ids, fout)
+
+    #sample n_users and their item interactions
+    print("Sample users ...")
+    user_data, news_data, logging_dates = subsample_users(n_users, all_item_ids, data_dir,
+                                               min_hist_len=min_hist_len,
+                                               max_hist_len=max_hist_len,
+                                               test_time_thresh=test_time_thresh)
+
+    #specify logging dates
+    logging_dates = {'start': logging_dates[0], 'end': logging_dates[1]}
+
+    if test_time_thresh is not None:
+        logging_dates['threshold'] = test_time_thresh
+
+
+    #sample item data for those items
+    valid_article_ids = set(news_data['train']).union(set(news_data['test']))
+
+    article_data = subsample_items_from_id(data_dir, valid_article_ids,
+                                        n_news=n_news, news_len=news_len,
+                                        test_time_thresh=test_time_thresh)
+    news_data['all'] = article_data['all']
+
+    return user_data, news_data, logging_dates
 
 if __name__ == "__main__":
 
@@ -327,10 +392,10 @@ if __name__ == "__main__":
     #parser.add_argument('--sample_name', type=str, default='', help='name for directory')
     parser.add_argument('--overwrite_existing', type=bool, default=True)
 
-    parser.add_argument('--item_sample_method', type=str, default='most_common', choices=['random', 'most_common'], help='')
+    parser.add_argument('--item_sample_method', type=str, default='wu', choices=['random', 'most_common', 'wu'], help='')
     parser.add_argument('--size', type=str, default='dev', choices=["dev", "medium", "custom"], help='size of dataset')
     parser.add_argument('--n_articles', type=int, default=2000, help='number of articles')
-    parser.add_argument('--n_users', type=int, default=20000, help='number of users')
+    parser.add_argument('--n_users', type=int, default=2000, help='number of users')
     parser.add_argument('--ratio_user_items', type=int, default=USER_ITEM_RATIO, help='ratio of user to items, e.g. 1 : 10')
 
     #parser.add_argument('--vocab_size', type=int, default=30000, help='vocab')
@@ -358,14 +423,23 @@ if __name__ == "__main__":
     threshold_date = int(datetime.datetime.strptime(config.time_threshold, '%d-%m-%Y-%H-%M-%S').strftime("%s")) #1577228399
 
     if "wu" == config.item_sample_method:
-        pass
+        news_data, user_data, logging_dates = get_data_wu_sampling(config.data_dir, n_users,
+                                                                   news_len=config.news_len,
+                                                                   min_hist_len=config.min_hist_len,
+                                                                   max_hist_len=config.max_hist_len,
+                                                                   save_path=config.save_path, sample_name=sample_name,
+                                                                   test_time_thresh=threshold_date,
+                                                                   overwrite_existing=config.overwrite_existing)
     else:
         news_data, user_data, logging_dates = get_data_common_interactions(config.data_dir, n_news, n_users,
                                                                            news_len=config.news_len,
                                                                            min_hist_len=config.min_hist_len,
+                                                                           max_hist_len=config.max_hist_len,
                                                                            save_path=config.save_path, sample_name=sample_name,
                                                                            test_time_thresh=threshold_date,
                                                                            overwrite_existing=config.overwrite_existing)
+
+    save_data_to_dir(config.save_path, sample_name, news_data, user_data, logging_dates)
 
     for key, val in logging_dates.items():
         print("{} {}".format(key, datetime.datetime.fromtimestamp(val).strftime('%Y-%m-%d %H:%M:%S')))
