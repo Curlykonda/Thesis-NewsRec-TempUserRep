@@ -36,20 +36,22 @@ echo $exp_name
 for datapath in "${data[@]}"
 do
 echo "$datapath"
-for SEED in "${SEDDS[@]}"
-do
-  #1
-  python -u train_npa.py --data_path=$datapath --word_emb_path=$embeddings --exp_name=$exp_name \
-  --npa_variant="vanilla" --random_seed=$SEED --n_epochs=$n_epochs --batch_size=$batch_size --train_method=$train
+  for SEED in "${SEDDS[@]}"
+  do
+    #1
+    python -u train_npa.py --data_path=$datapath --word_emb_path=$embeddings --exp_name=$exp_name \
+    --npa_variant="vanilla" --random_seed=$SEED --n_epochs=$n_epochs --batch_size=$batch_size --train_method=$train
 
-  #2
-  python -u train_npa.py --data_path=$datapath --word_emb_path=$embeddings --exp_name=$exp_name \
-  --npa_variant="vanilla" --random_seed=$SEED --n_epochs=$n_epochs --batch_size=$batch_size  --train_method=$train \
-  --lr=0.0001
+    #2
+    python -u train_npa.py --data_path=$datapath --word_emb_path=$embeddings --exp_name=$exp_name \
+    --npa_variant="vanilla" --random_seed=$SEED --n_epochs=$n_epochs --batch_size=$batch_size  --train_method=$train \
+    --lr=0.0001
 
-#  #3
-#  python -u train_npa.py --data_path=$datapath --word_emb_path=$embeddings --exp_name=$exp_name \
-#  --npa_variant="vanilla" --random_seed=$SEED --n_epochs=$n_epochs --batch_size=$batch_size  --train_method=$train \
-#  --lr=0.0005
+  #  #3
+  #  python -u train_npa.py --data_path=$datapath --word_emb_path=$embeddings --exp_name=$exp_name \
+  #  --npa_variant="vanilla" --random_seed=$SEED --n_epochs=$n_epochs --batch_size=$batch_size  --train_method=$train \
+  #  --lr=0.0005
+  done
 done
-done
+
+echo "job done"
