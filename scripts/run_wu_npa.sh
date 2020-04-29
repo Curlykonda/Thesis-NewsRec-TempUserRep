@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=van_npa_m_common
+#SBATCH --job-name=van_npa_wu
 #SBATCH -n 8
 #SBATCH -t 16:00:00
 #SBATCH -p gpu_shared
