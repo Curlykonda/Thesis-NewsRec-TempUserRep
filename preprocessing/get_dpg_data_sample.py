@@ -387,8 +387,8 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
 
-    parser.add_argument('--data_dir', type=str, default='../datasets/dpg/', help='data path')
-    parser.add_argument('--save_path', type=str, default='../datasets/dpg/', help='path to save data')
+    parser.add_argument('--data_dir', type=str, default='../datasets/DPG_dec19/', help='data path')
+    parser.add_argument('--save_path', type=str, default='../datasets/DPG_dec19/', help='path to save data')
     #parser.add_argument('--sample_name', type=str, default='', help='name for directory')
     parser.add_argument('--overwrite_existing', type=bool, default=True)
 
