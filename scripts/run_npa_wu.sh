@@ -36,7 +36,7 @@ echo $exp_name
 for datapath in "${data[@]}"
 do
 echo "$datapath"
-  for SEED in "${SEDDS[@]}"
+  for SEED in "${SEEDS[@]}"
   do
     #1
     python -u train_npa.py --data_path=$datapath --word_emb_path=$embeddings --exp_name=$exp_name \

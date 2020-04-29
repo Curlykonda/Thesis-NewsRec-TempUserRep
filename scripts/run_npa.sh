@@ -10,11 +10,10 @@ module load pre2019
 module load Miniconda3/4.3.27
 source activate thesis-user-modelling
 
-workdir=$PWD
+
 
 #[ -f /etc/resolv.conf ] && echo "File exists" || echo "File does NOT exist"
 
-cd $workdir/train_scripts
 
 python --version
 
@@ -30,14 +29,16 @@ eval="wu"
 exp_name="med_vanilla_npa_CE"
 n_epochs=15
 batch_size=100
-
 SEEDS=(42 113)
+
+workdir=$PWD
+cd $workdir/train_scripts
 
 echo $exp_name
 for datapath in "${data[@]}"
 do
 echo "$datapath"
-  for SEED in "${SEDDS[@]}"
+  for SEED in "${SEEDS[@]}"
   do
     echo "$SEED"
     #1
