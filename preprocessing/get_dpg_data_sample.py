@@ -441,5 +441,7 @@ if __name__ == "__main__":
 
     save_data_to_dir(config.save_path, sample_name, news_data, user_data, logging_dates)
 
+    print("Done")
+    print("Logging dates: ")
     for key, val in logging_dates.items():
         print("{} {}".format(key, datetime.datetime.fromtimestamp(val).strftime('%Y-%m-%d %H:%M:%S')))
