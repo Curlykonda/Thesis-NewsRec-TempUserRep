@@ -20,7 +20,8 @@ python --version
 
 #srun -n 2 -t 00:30:00 --pty bash -il
 
-data=("../datasets/DPG_dec19/medium_time_split_wu/")
+data=("../datasets/DPG_dec19/medium_time_split_most_common/"
+      "../datasets/DPG_dec19/medium_time_split_random/")
 #
 
 embeddings="../embeddings/cc.nl.300.bin"
