@@ -5,6 +5,7 @@ import itertools
 import random
 import nltk
 from nltk.tokenize import word_tokenize
+#nltk.download('punkt')
 from collections import defaultdict, Counter
 import numpy as np
 import pickle

@@ -345,6 +345,8 @@ def get_data_wu_sampling(data_dir, n_users, news_len, min_hist_len, max_hist_len
         if not overwrite_existing:
             print("Data will NOT be overwritten => Exit")
             return (None, None, None)
+        else:
+            print("Data will be overwritten")
 
     #read in all valid item ids
     f_name_all_item_ids = "all_item_ids.pkl"
@@ -377,11 +379,14 @@ def get_data_wu_sampling(data_dir, n_users, news_len, min_hist_len, max_hist_len
     valid_article_ids = set(news_data['train']).union(set(news_data['test']))
 
     article_data = subsample_items_from_id(data_dir, valid_article_ids,
-                                        n_news=n_news, news_len=news_len,
+                                        n_news=-1, news_len=news_len,
                                         test_time_thresh=test_time_thresh)
     news_data['all'] = article_data['all']
 
-    return user_data, news_data, logging_dates
+    assert len(news_data['all']) == len(valid_article_ids), "Article mismatch"
+    assert len(user_data) == n_users, "Not enough users sampled"
+
+    return news_data, user_data, logging_dates
 
 if __name__ == "__main__":
 
