@@ -421,7 +421,7 @@ if __name__ == "__main__":
 
     # input data
     parser.add_argument('--data_type', type=str, default='DPG', help='options for data format: DPG, NPA or Adressa ')
-    parser.add_argument('--data_path', type=str, default='../datasets/DPG_dec19/dev_time_split_wu/', help='path to data directory') # dev : i10k_u5k_s30/
+    parser.add_argument('--data_path', type=str, default='../datasets/DPG_nov19/medium_time_split_wu/', help='path to data directory') # dev : i10k_u5k_s30/
     parser.add_argument('--word_emb_path', type=str, default='../embeddings/glove_eng.840B.300d.txt', help='path to directory with word embeddings')
     parser.add_argument('--load_prep_data', type=bool, default=True, help="use existing, pre-processed data")
 

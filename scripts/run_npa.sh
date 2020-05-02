@@ -19,15 +19,14 @@ python --version
 
 #srun -n 2 -t 00:30:00 --pty bash -il
 
-data=("../datasets/DPG_dec19/medium_time_split_most_common/"
-      "../datasets/DPG_dec19/medium_time_split_random/")
+data=("../datasets/DPG_nov19/medium_time_split_most_common/")
 #
 
 embeddings="../embeddings/cc.nl.300.bin"
 train="wu"
 eval="wu"
 exp_name="med_vanilla_npa_CE"
-n_epochs=15
+n_epochs=20
 batch_size=100
 SEEDS=(42 113)
 

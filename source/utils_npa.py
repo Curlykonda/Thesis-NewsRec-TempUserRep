@@ -141,6 +141,23 @@ def get_hyper_model_params(config):
 
     return hyper_params, model_params
 
+
+def get_art_ids_from_read_hist(raw_articles_read, art_id2idx):
+    if len(raw_articles_read):
+
+        if len(raw_articles_read[0]) == 3:
+            art_ids, time_stamps = zip(*[(art_id2idx[art_id], time_stamp)
+                                           for _, art_id, time_stamp in raw_articles_read])
+        elif len(raw_articles_read[0]) == 2:
+            art_ids, time_stamps = zip(*[(art_id2idx[art_id], time_stamp)
+                                           for art_id, time_stamp in raw_articles_read])
+        else:
+            raise NotImplementedError()
+
+        return list(art_ids), list(time_stamps)
+    else:
+        return [], []
+
 def prep_dpg_user_file(user_file, news_file, art_id2idx, train_method, test_interval_days : int, neg_sample_ratio=4, max_hist_len=50, preserve_seq=False):
     '''
     Given a subsample of users and the valid articles, we truncate and encode users' reading history with article indices.
@@ -208,15 +225,21 @@ def prep_dpg_user_file(user_file, news_file, art_id2idx, train_method, test_inte
         # constraint train set by time
 
         w_time_stamp = False
-        pos_impre, time_stamps = zip(*[(art_id2idx[art_id], time_stamp)
-                                       for _, art_id, time_stamp in user_data[u_id]["articles_read"]])
+        pos_impre, time_stamps = get_art_ids_from_read_hist(user_data[u_id]['articles_train'], art_id2idx)
 
         if "articles_train" in user_data[u_id].keys():
             #[f(x) if condition else g(x) for x in sequence]
-            train_impres = [(art_id2idx[art_id], time_stamp) if w_time_stamp else art_id2idx[art_id]
-                            for _, art_id, time_stamp in user_data[u_id]['articles_train']] # (id, time)
-            test_impres = [(art_id2idx[art_id], time_stamp) if w_time_stamp else art_id2idx[art_id]
-                            for _, art_id, time_stamp in user_data[u_id]['articles_test']]
+
+            art_ids, time_stamps = get_art_ids_from_read_hist(user_data[u_id]['articles_train'], art_id2idx)
+            train_impres = list(zip(art_ids, time_stamps)) if w_time_stamp else art_ids
+
+            art_ids, time_stamps = get_art_ids_from_read_hist(user_data[u_id]['articles_test'], art_id2idx)
+            test_impres = list(zip(art_ids, time_stamps)) if w_time_stamp else art_ids
+
+            # train_impres = [(art_id2idx[art_id], time_stamp) if w_time_stamp else art_id2idx[art_id]
+            #                 for _, art_id, time_stamp in user_data[u_id]['articles_train']] # (id, time)
+            # test_impres = [(art_id2idx[art_id], time_stamp) if w_time_stamp else art_id2idx[art_id]
+            #                 for _, art_id, time_stamp in user_data[u_id]['articles_test']]
         else:
             train_impres, test_impres = [], []
 

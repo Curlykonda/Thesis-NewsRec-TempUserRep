@@ -1,5 +1,6 @@
 import argparse
 import json
+import arrow
 import gzip
 import os
 import pickle
@@ -77,10 +78,10 @@ def get_n_words(text, tokenizer=None):
 def update_logging_dates(articles_read, logging_dates):
     first, last = logging_dates
 
-    for _, art_id, time_stamp in articles_read:
-        # entry[0] = news_paper
-        # entry[1] = article_id
-        # entry[2] = time_stamp
+    for art_id, time_stamp in articles_read:
+        # entry[0] = article_id
+        # entry[1] = time_stamp
+
         if first is None or last is None:
             first = last = time_stamp
 
@@ -126,7 +127,14 @@ def subsample_users(n_users, article_data, data_dir, min_hist_len, max_hist_len=
                 history = []
                 # check if article ID is present in our set of valid IDs
                 for entry in user['articles_read']:
-                    _, art_id, time_stamp = entry
+                    if len(entry) == 3: ## december 19 data has 3 fields for each interaction
+                        _, art_id, time_stamp = entry
+
+                    elif len(entry) == 5: ## november 19 data has 5
+                        art_id, ts = entry[-2:]
+                        # convert time_stamp to UNIX
+                        time_stamp = time_stamp2unix(ts)
+
 
                     if art_id not in valid_item_ids:
                         unk_arts[art_id] += 1
@@ -141,11 +149,11 @@ def subsample_users(n_users, article_data, data_dir, min_hist_len, max_hist_len=
                                 user['articles_test'] = []
 
                             if time_stamp < test_time_thresh:
-                                user['articles_train'].append(entry)
+                                user['articles_train'].append([art_id, time_stamp])
                             else:
-                                user['articles_test'].append(entry)
+                                user['articles_test'].append([art_id, time_stamp])
 
-                        history.append(entry)
+                        history.append([art_id, time_stamp])
                         c_articles_raw.update([art_id])
 
                 user['articles_read'] = history
@@ -155,16 +163,16 @@ def subsample_users(n_users, article_data, data_dir, min_hist_len, max_hist_len=
                 # add valid user that fulfills condition
                 # exclude very high frequency users (potentially bots) and very low ones (too little interaction for proper modelling)
                 # item.keys() = dict_keys(['user_id', 'articles_read', 'opened_pushes', 'articles_pushed'])
-                user['articles_read'] = sorted(user['articles_read'], key=lambda entry: entry[2])  # sort by time_stamp
+                user['articles_read'] = sorted(user['articles_read'], key=lambda entry: entry[1])  # sort by time_stamp
 
                 if test_time_thresh is not None:
                     if len(user['articles_train']) >= min_hist_len:
                         #
-                        art_train = [art_id for _, art_id, _ in user['articles_train']]
+                        art_train = [art_id for art_id, _ in user['articles_train']]
                         article_data['train'].update(art_train)
                         c_articles_thresh.update(art_train)
 
-                        art_test = [art_id for _, art_id, _ in user['articles_test']]
+                        art_test = [art_id for art_id, _ in user['articles_test']]
                         article_data['test'].update(art_test)
                         c_articles_thresh.update(art_test)
                     else:
@@ -198,7 +206,12 @@ def count_article_interactions(data_dir, n_users=None):
 
     print("Determine most common articles based on user interaction ...")
     for i, user in tqdm(enumerate(data_stream_generator(data_dir + "users"))):
-        _, art_ids, _ = zip(*user['articles_read'])
+        if len(user['articles_read'][0]) == 3:
+            _, art_ids, _ = zip(*user['articles_read'])
+        elif len(user['articles_read'][0]) == 5:
+            _, _, _, art_ids, _ = zip(*user['articles_read'])
+        else:
+            raise NotImplementedError("Unknown format of 'articles_read'")
         c_art_ids.update(art_ids)
 
         if i == limit:
@@ -228,6 +241,8 @@ def subsample_items_from_id(data_dir: str, valid_ids: set, news_len: int, n_news
             val_dict = {key: val for (key, val) in item.items() if key not in keys_to_exclude}
             article_dict['all'][item['short_id']] = val_dict
 
+            if item['pub_date'] is not None:
+                item['pub_date'] = (item['first_pub_date'] if item['first_pub_date'] is not None else item['pub_date'])
             #item['pub_date'] = (item['first_pub_date'] if item['first_pub_date'] is not None else item['pub_date'])
             # currently no pub_date available [30.03.]
 
@@ -250,7 +265,7 @@ def save_data_to_dir(save_path, sample_name, news_data, user_data, logging_dates
         save_path = Path(save_path)
 
         if sample_name is None:
-            sample_name = ('i{}k_u{}k_s{}'.format(int(n_news/1e3), int(n_users/1e3), news_len))
+            sample_name = ('i{}k_u{}k_s{}'.format(int(n_news/1e3), int(n_users/1e3), len(news_data['all'])))
         save_path = save_path / sample_name
         save_path.mkdir(parents=True, exist_ok=True)
 
@@ -319,6 +334,19 @@ def get_data_common_interactions(data_dir, n_news, n_users, news_len=30, min_his
 
     return news_data, user_data, logging_dates
 
+def time_stamp2unix(time_stamp, format=None):
+    if format is None:
+        try:
+            t_unix = arrow.get(time_stamp).timestamp
+            #t_unix = int(datetime.datetime.strptime(time_stamp, '%d-%m-%Y-%H-%M-%S').strftime("%s"))
+
+        except:
+            print("Error in converting a timestamp! Please specify format")
+            t_unix = -1
+    else:
+        t_unix = arrow.get(time_stamp, format).timestamp
+
+    return t_unix
 
 def get_all_item_ids(data_dir):
     item_ids = set()
@@ -392,23 +420,25 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
 
-    parser.add_argument('--data_dir', type=str, default='../datasets/DPG_dec19/', help='data path')
-    parser.add_argument('--save_path', type=str, default='../datasets/DPG_dec19/', help='path to save data')
+    parser.add_argument('--data_dir', type=str, default='../datasets/DPG_nov19/', help='data path')
+    parser.add_argument('--save_path', type=str, default='../datasets/DPG_nov19/', help='path to save data')
     #parser.add_argument('--sample_name', type=str, default='', help='name for directory')
     parser.add_argument('--overwrite_existing', type=bool, default=True)
 
-    parser.add_argument('--item_sample_method', type=str, default='wu', choices=['random', 'most_common', 'wu'], help='')
-    parser.add_argument('--size', type=str, default='dev', choices=["dev", "medium", "custom"], help='size of dataset')
+    parser.add_argument('--item_sample_method', type=str, default='most_common', choices=['random', 'most_common', 'wu'], help='')
+    parser.add_argument('--size', type=str, default='medium', choices=["dev", "medium", "custom"], help='size of dataset')
     parser.add_argument('--n_articles', type=int, default=2000, help='number of articles')
     parser.add_argument('--n_users', type=int, default=2000, help='number of users')
     parser.add_argument('--ratio_user_items', type=int, default=USER_ITEM_RATIO, help='ratio of user to items, e.g. 1 : 10')
 
     #parser.add_argument('--vocab_size', type=int, default=30000, help='vocab')
-    parser.add_argument('--time_threshold', type=str, default="24-12-2019-23-59-59", help='date for splitting train/test')
+    parser.add_argument('--time_threshold', type=str, default="23-11-2019 23:59:59", help='date for splitting train/test')
+    parser.add_argument('--time_format', type=str, default=None, choices=['YYYY-MM-DD HH:mm:ss', 'DD-MM-YYYY HH:mm:ss', 'YYYY-MM-DD-HH-mm-ss'],
+                        help="Specify the format for the time threshold if it defiates from ISO 8601, e.g. >> 2013-09-30T15:34:00.000-07:00 <<")
 
     parser.add_argument('--news_len', type=int, default=30, help='number of words from news body')
-    parser.add_argument('--min_hist_len', type=int, default=5, help='minimum number of articles in reading history')
-    parser.add_argument('--max_hist_len', type=int, default=260, help='max number of articles in reading history')
+    parser.add_argument('--min_hist_len', type=int, default=6, help='minimum number of articles in reading history')
+    parser.add_argument('--max_hist_len', type=int, default=300, help='max number of articles in reading history')
 
 
     config = parser.parse_args()
@@ -425,7 +455,12 @@ if __name__ == "__main__":
     delim = "_"
     sample_name = config.size + delim + "time_split" + delim + config.item_sample_method
 
-    threshold_date = int(datetime.datetime.strptime(config.time_threshold, '%d-%m-%Y-%H-%M-%S').strftime("%s")) #1577228399
+    if config.time_format is not None:
+        threshold_time = time_stamp2unix(config.time_threshold, config.time_format)
+    else:
+        threshold_time = arrow.get(config.time_threshold, 'DD-MM-YYYY HH:mm:ss').timestamp
+
+    #threshold_date = int(datetime.datetime.strptime(config.time_threshold, '%d-%m-%Y-%H-%M-%S').strftime("%s")) #1577228399
 
     if "wu" == config.item_sample_method:
         news_data, user_data, logging_dates = get_data_wu_sampling(config.data_dir, n_users,
@@ -433,7 +468,7 @@ if __name__ == "__main__":
                                                                    min_hist_len=config.min_hist_len,
                                                                    max_hist_len=config.max_hist_len,
                                                                    save_path=config.save_path, sample_name=sample_name,
-                                                                   test_time_thresh=threshold_date,
+                                                                   test_time_thresh=threshold_time,
                                                                    overwrite_existing=config.overwrite_existing)
     else:
         news_data, user_data, logging_dates = get_data_common_interactions(config.data_dir, n_news, n_users,
@@ -441,12 +476,13 @@ if __name__ == "__main__":
                                                                            min_hist_len=config.min_hist_len,
                                                                            max_hist_len=config.max_hist_len,
                                                                            save_path=config.save_path, sample_name=sample_name,
-                                                                           test_time_thresh=threshold_date,
+                                                                           test_time_thresh=threshold_time,
                                                                            overwrite_existing=config.overwrite_existing)
 
     save_data_to_dir(config.save_path, sample_name, news_data, user_data, logging_dates)
 
     print("Done")
+    print("User: {} \t Articles: {}".format(len(user_data), len(news_data['all'])))
     print("Logging dates: ")
     for key, val in logging_dates.items():
-        print("{} {}".format(key, datetime.datetime.fromtimestamp(val).strftime('%Y-%m-%d %H:%M:%S')))
+        print("{} {}".format(key, arrow.get(val).format()))
